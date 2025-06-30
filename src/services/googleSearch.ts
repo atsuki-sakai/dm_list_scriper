@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { GoogleSearchResult, GoogleBusinessInfo } from '../types/index';
 import { sleep, calculateRelevanceScore } from '../utils/index';
+import { BRING_SEARCH, YAHOO_SEARCH } from '../constants/index';
 
 // ======================= 検索エンジン状態管理 ========================
 
@@ -48,8 +49,16 @@ export function resetEngineStatus(): void {
  */
 export function showEngineStatus(): void {
     console.log('  📊 検索エンジン状態:');
+    
+    // 設定による有効/無効状態を表示
+    console.log('  📊 設定による検索エンジン制御:');
+    console.log(`    BING: ${BRING_SEARCH ? '✅ 有効' : '❌ 無効 (設定により)'}`);
+    console.log(`    YAHOO: ${YAHOO_SEARCH ? '✅ 有効' : '❌ 無効 (設定により)'}`);
+    
+    // 動的な無効化状態を表示
+    console.log('  📊 動的無効化状態 (エラーによる):');
     Object.entries(disabledEngines).forEach(([engine, disabled]) => {
-        const status = disabled ? '❌ 無効' : '✅ 有効';
+        const status = disabled ? '❌ 無効 (エラーのため)' : '✅ 有効';
         console.log(`    ${engine.toUpperCase()}: ${status}`);
     });
 }
@@ -857,7 +866,7 @@ async function searchYahoo(query: string): Promise<GoogleSearchResult> {
 async function searchYahooPage(query: string, page: number): Promise<GoogleSearchResult> {
     try {
         // ページ間の遅延（Yahooは制限が厳しいため長めに）
-        await sleep(2000 + Math.random() * 1500); // 2-3.5秒のランダムな遅延
+        await sleep(500 + Math.random() * 1000); // 0.5-1.5秒のランダムな遅延
         
         // 2ページ目の場合はbパラメータで開始位置を指定
         const startIndex = (page - 1) * 10 + 1;
@@ -1038,8 +1047,12 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
         console.log('  ⚠️  Google Search APIは無効化されているためスキップ');
     }
     
-    // 2. Bingで検索（有効な場合のみ）
-    if (isEngineEnabled('bing')) {
+    // 2. Bingで検索（設定と動的無効化状態の両方をチェック）
+    if (!BRING_SEARCH) {
+        console.log('  ⚠️  Bing検索は設定により無効化されているためスキップ');
+    } else if (!isEngineEnabled('bing')) {
+        console.log('  ⚠️  Bing検索は動的に無効化されているためスキップ');
+    } else {
         console.log('  ➡️ Bing検索を実行...');
         const bingResult = await searchBing(query);
         
@@ -1059,12 +1072,14 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
             console.log('  ✅ Bingで Instagram URL発見！他の検索エンジンをスキップ');
             return mergedResult;
         }
-    } else {
-        console.log('  ⚠️  Bing検索は無効化されているためスキップ');
     }
     
-    // 3. Yahoo検索を試行（有効な場合のみ）
-    if (isEngineEnabled('yahoo')) {
+    // 3. Yahoo検索を試行（設定と動的無効化状態の両方をチェック）
+    if (!YAHOO_SEARCH) {
+        console.log('  ⚠️  Yahoo検索は設定により無効化されているためスキップ');
+    } else if (!isEngineEnabled('yahoo')) {
+        console.log('  ⚠️  Yahoo検索は動的に無効化されているためスキップ');
+    } else {
         console.log('  ➡️ Yahoo検索を実行...');
         const yahooResult = await searchYahoo(query);
         
@@ -1084,8 +1099,6 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
             console.log('  ✅ Yahooで Instagram URL発見！残りの検索エンジンをスキップ');
             return mergedResult;
         }
-    } else {
-        console.log('  ⚠️  Yahoo検索は無効化されているためスキップ');
     }
     
     
