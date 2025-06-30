@@ -12,9 +12,7 @@ import { sleep, calculateRelevanceScore } from '../utils/index';
 const disabledEngines = {
     google: false,
     bing: false,
-    yahoo: false,
-    goo: false,
-    baidu: false
+    yahoo: false
 };
 
 /**
@@ -566,8 +564,8 @@ async function searchBing(query: string): Promise<GoogleSearchResult> {
         // Instagram URLが見つかった場合は2ページ目をスキップ（効率化）
         if (result.instagramUrl) {
             console.log(`  🔍 Bing: Instagram URLが見つかったため2ページ目をスキップ`);
-        } else {
-            // Instagram URLが見つからない場合のみ2ページ目を検索
+        } else if (isEngineEnabled('bing')) {
+            // Bingエンジンが有効で、Instagram URLが見つからない場合のみ2ページ目を検索
             console.log(`  🔍 Bing 2ページ目を検索中...`);
             const secondPageResult = await searchBingPage(query, 2);
             
@@ -581,6 +579,8 @@ async function searchBing(query: string): Promise<GoogleSearchResult> {
             if (!result.homepageUrl && secondPageResult.homepageUrl) {
                 result.homepageUrl = secondPageResult.homepageUrl;
             }
+        } else {
+            console.log(`  🚫 Bing検索エンジンが無効化されているため2ページ目をスキップ`);
         }
         
         console.log(`  🔍 Bing検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'}, Email=${result.email ? '✓' : '✗'}, Homepage=${result.homepageUrl ? '✓' : '✗'}`);
@@ -782,6 +782,13 @@ async function searchBingPage(query: string, page: number): Promise<GoogleSearch
 
     } catch (error) {
         console.error(`  ❌ Bing ${page}ページ目検索でエラーが発生: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // 429エラー（レート制限）の場合は検索エンジンを無効化
+        if (error instanceof Error && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
+            console.log(`  🚫 Bing検索エンジンを無効化しました（レート制限のため）`);
+            disableEngine('bing');
+        }
+        
         return {};
     }
 }
@@ -805,8 +812,8 @@ async function searchYahoo(query: string): Promise<GoogleSearchResult> {
         // Instagram URLが見つかった場合は2ページ目をスキップ（効率化）
         if (result.instagramUrl) {
             console.log(`  🎯 Yahoo: Instagram URLが見つかったため2ページ目をスキップ`);
-        } else {
-            // Instagram URLが見つからない場合のみ2ページ目を検索
+        } else if (isEngineEnabled('yahoo')) {
+            // Yahooエンジンが有効で、Instagram URLが見つからない場合のみ2ページ目を検索
             console.log(`  🎯 Yahoo 2ページ目を検索中...`);
             const secondPageResult = await searchYahooPage(query, 2);
             
@@ -817,6 +824,8 @@ async function searchYahoo(query: string): Promise<GoogleSearchResult> {
             if (!result.email && secondPageResult.email) {
                 result.email = secondPageResult.email;
             }
+        } else {
+            console.log(`  🚫 Yahoo検索エンジンが無効化されているため2ページ目をスキップ`);
         }
         
         console.log(`  🎯 Yahoo検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'}, Email=${result.email ? '✓' : '✗'}`);
@@ -986,299 +995,18 @@ async function searchYahooPage(query: string, page: number): Promise<GoogleSearc
 
     } catch (error) {
         console.error(`  ❌ Yahoo ${page}ページ目検索でエラーが発生: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        return {};
-    }
-}
-
-/**
- * goo検索を実行してInstagram URLとメールアドレスを抽出
- * @param query 検索クエリ
- * @returns 抽出された情報
- */
-async function searchGoo(query: string): Promise<GoogleSearchResult> {
-    try {
-        // goo検索のレート制限対策（長めの遅延）
-        await sleep(2500 + Math.random() * 1500); // 2.5-4秒のランダムな遅延
         
-        console.log(`  🌟 goo検索を実行中...`);
-        const searchUrl = `https://search.goo.ne.jp/web.jsp?MT=${encodeURIComponent(query)}`;
-        
-        const { data } = await axios.get(searchUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://www.goo.ne.jp/',
-            },
-            timeout: 15000
-        });
-
-        const $ = cheerio.load(data);
-        const result: GoogleSearchResult = {};
-
-        // Instagram URLを検索
-        let instagramUrl: string | undefined;
-        
-        // gooのリンク構造に合わせて検索
-        const instagramLinks = $('a[href*="instagram.com"]');
-        console.log(`    🌟 goo Instagram候補リンク数: ${instagramLinks.length}`);
-        
-        instagramLinks.each((idx, el) => {
-            if (idx < 3) { // 最初の3件を表示
-                const hrefDbg = $(el).attr('href');
-                console.log(`      [${idx}] ${hrefDbg}`);
-            }
-            
-            const href = $(el).attr('href');
-            if (href && !instagramUrl) {
-                if (href.includes('instagram.com')) {
-                    instagramUrl = href;
-                    return false; // 最初に見つかったものを使用
-                }
-            }
-        });
-        
-        // テキスト内のInstagram URLも検索
-        if (!instagramUrl) {
-            const bodyText = $('body').text();
-            const instagramPatterns = [
-                /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_\.]+\/?/g,
-                /@https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_\.]+\/?/g,
-                /instagram\.com\/[a-zA-Z0-9_\.]+/g
-            ];
-            
-            for (const pattern of instagramPatterns) {
-                const matches = bodyText.match(pattern);
-                if (matches && matches.length > 0) {
-                    let url = matches[0];
-                    if (url.startsWith('@')) {
-                        url = url.substring(1);
-                    }
-                    if (!url.startsWith('http')) {
-                        url = 'https://' + url;
-                    }
-                    instagramUrl = url;
-                    break;
-                }
-            }
-        }
-        
-        if (instagramUrl) {
-            result.instagramUrl = instagramUrl;
-        }
-
-        // メールアドレスと電話番号も検索（簡略版）
-        const searchResults = $('body').text();
-        
-        // メールアドレス検索
-        const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-        const emailMatches = searchResults.match(emailPattern);
-        
-        if (emailMatches && emailMatches.length > 0) {
-            const filteredEmails = emailMatches.filter(email => {
-                const lowerEmail = email.toLowerCase();
-                return (
-                    !lowerEmail.includes('@gmail.com') && 
-                    !lowerEmail.includes('@yahoo.co.jp') && 
-                    !lowerEmail.includes('@yahoo.com') &&
-                    !lowerEmail.includes('@hotmail.com') &&
-                    !lowerEmail.includes('@outlook.com') &&
-                    !lowerEmail.includes('@goo.ne.jp') && // goo関連を除外
-                    !lowerEmail.includes('noreply') &&
-                    !lowerEmail.includes('no-reply') &&
-                    email.length > 5 && email.includes('@') && email.includes('.')
-                );
-            });
-            
-            if (filteredEmails.length > 0) {
-                result.email = filteredEmails[0];
-            }
-        }
-
-        // 電話番号検索
-        const phonePatterns = [
-            /0\d{1,4}-\d{1,4}-\d{3,4}/g,
-            /TEL[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-            /電話[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-        ];
-
-        let phoneNumber: string | undefined;
-        for (const pattern of phonePatterns) {
-            const phoneMatches = searchResults.match(pattern);
-            if (phoneMatches && phoneMatches.length > 0) {
-                phoneNumber = phoneMatches[0].replace(/^(TEL[:\s]*|電話[:\s]*)/gi, '').trim();
-                break;
-            }
-        }
-
-        if (phoneNumber) {
-            result.phoneNumber = phoneNumber;
-        }
-
-        console.log(`  🌟 goo検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'}, Email=${result.email ? '✓' : '✗'}`);
-        if (result.instagramUrl) {
-            console.log(`    📱 Instagram: ${result.instagramUrl}`);
-        }
-        if (result.email) {
-            console.log(`    📧 Email: ${result.email}`);
-        }
-        
-        return result;
-        
-    } catch (error) {
-        console.error(`  ❌ goo検索でエラーが発生: ${error instanceof Error ? error.message : 'Unknown error'}`);
         // 429エラー（レート制限）の場合は検索エンジンを無効化
         if (error instanceof Error && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
-            disableEngine('goo');
+            console.log(`  🚫 Yahoo検索エンジンを無効化しました（レート制限のため）`);
+            disableEngine('yahoo');
         }
+        
         return {};
     }
 }
 
-/**
- * Baidu検索を実行してInstagram URLとメールアドレスを抽出
- * @param query 検索クエリ
- * @returns 抽出された情報
- */
-async function searchBaidu(query: string): Promise<GoogleSearchResult> {
-    try {
-        // Baidu検索のレート制限対策（長めの遅延）
-        await sleep(3000 + Math.random() * 2000); // 3-5秒のランダムな遅延
-        
-        console.log(`  🐻 Baidu検索を実行中...`);
-        const searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}&ie=utf-8`;
-        
-        const { data } = await axios.get(searchUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ja,zh-CN;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://www.baidu.com/',
-            },
-            timeout: 15000
-        });
 
-        const $ = cheerio.load(data);
-        const result: GoogleSearchResult = {};
-
-        // Instagram URLを検索
-        let instagramUrl: string | undefined;
-        
-        // Baiduのリンク構造に合わせて検索
-        const instagramLinks = $('a[href*="instagram.com"]');
-        console.log(`    🐻 Baidu Instagram候補リンク数: ${instagramLinks.length}`);
-        
-        instagramLinks.each((idx, el) => {
-            if (idx < 3) { // 最初の3件を表示
-                const hrefDbg = $(el).attr('href');
-                console.log(`      [${idx}] ${hrefDbg}`);
-            }
-            
-            const href = $(el).attr('href');
-            if (href && !instagramUrl) {
-                if (href.includes('instagram.com')) {
-                    instagramUrl = href;
-                    return false; // 最初に見つかったものを使用
-                }
-            }
-        });
-        
-        // テキスト内のInstagram URLも検索
-        if (!instagramUrl) {
-            const bodyText = $('body').text();
-            const instagramPatterns = [
-                /https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_\.]+\/?/g,
-                /@https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_\.]+\/?/g,
-                /instagram\.com\/[a-zA-Z0-9_\.]+/g
-            ];
-            
-            for (const pattern of instagramPatterns) {
-                const matches = bodyText.match(pattern);
-                if (matches && matches.length > 0) {
-                    let url = matches[0];
-                    if (url.startsWith('@')) {
-                        url = url.substring(1);
-                    }
-                    if (!url.startsWith('http')) {
-                        url = 'https://' + url;
-                    }
-                    instagramUrl = url;
-                    break;
-                }
-            }
-        }
-        
-        if (instagramUrl) {
-            result.instagramUrl = instagramUrl;
-        }
-
-        // メールアドレスと電話番号も検索（簡略版）
-        const searchResults = $('body').text();
-        
-        // メールアドレス検索
-        const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-        const emailMatches = searchResults.match(emailPattern);
-        
-        if (emailMatches && emailMatches.length > 0) {
-            const filteredEmails = emailMatches.filter(email => {
-                const lowerEmail = email.toLowerCase();
-                return (
-                    !lowerEmail.includes('@gmail.com') && 
-                    !lowerEmail.includes('@yahoo.co.jp') && 
-                    !lowerEmail.includes('@baidu.com') && // Baidu関連を除外
-                    !lowerEmail.includes('noreply') &&
-                    email.length > 5 && email.includes('@') && email.includes('.')
-                );
-            });
-            
-            if (filteredEmails.length > 0) {
-                result.email = filteredEmails[0];
-            }
-        }
-
-        // 電話番号検索
-        const phonePatterns = [
-            /0\d{1,4}-\d{1,4}-\d{3,4}/g,
-            /TEL[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-            /電話[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-        ];
-
-        let phoneNumber: string | undefined;
-        for (const pattern of phonePatterns) {
-            const phoneMatches = searchResults.match(pattern);
-            if (phoneMatches && phoneMatches.length > 0) {
-                phoneNumber = phoneMatches[0].replace(/^(TEL[:\s]*|電話[:\s]*)/gi, '').trim();
-                break;
-            }
-        }
-
-        if (phoneNumber) {
-            result.phoneNumber = phoneNumber;
-        }
-
-        console.log(`  🐻 Baidu検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'}, Email=${result.email ? '✓' : '✗'}`);
-        if (result.instagramUrl) {
-            console.log(`    📱 Instagram: ${result.instagramUrl}`);
-        }
-        if (result.email) {
-            console.log(`    📧 Email: ${result.email}`);
-        }
-        
-        return result;
-        
-    } catch (error) {
-        console.error(`  ❌ Baidu検索でエラーが発生: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        // 429エラー（レート制限）の場合は検索エンジンを無効化
-        if (error instanceof Error && (error.message.includes('429') || error.message.includes('Too Many Requests'))) {
-            disableEngine('baidu');
-        }
-        return {};
-    }
-}
 
 /**
  * 検索を実行してInstagram URLとメールアドレスを抽出（効率的な検索エンジン戦略）
@@ -1360,49 +1088,6 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
         console.log('  ⚠️  Yahoo検索は無効化されているためスキップ');
     }
     
-    // 4. goo検索を実行（有効な場合のみ）
-    if (isEngineEnabled('goo')) {
-        console.log('  ➡️ goo検索を実行...');
-        const gooResult = await searchGoo(query);
-        
-        // goo結果をマージ
-        if (!mergedResult.instagramUrl && gooResult.instagramUrl) {
-            mergedResult.instagramUrl = gooResult.instagramUrl;
-        }
-        if (!mergedResult.email && gooResult.email) {
-            mergedResult.email = gooResult.email;
-        }
-        if (!mergedResult.homepageUrl && gooResult.homepageUrl) {
-            mergedResult.homepageUrl = gooResult.homepageUrl;
-        }
-        
-        // gooでもInstagram URLが見つかった場合は早期終了
-        if (mergedResult.instagramUrl) {
-            console.log('  ✅ gooで Instagram URL発見！Baidu検索をスキップ');
-            return mergedResult;
-        }
-    } else {
-        console.log('  ⚠️  goo検索は無効化されているためスキップ');
-    }
-    
-    // 5. 最後の手段としてBaidu検索を実行（有効な場合のみ）
-    if (isEngineEnabled('baidu')) {
-        console.log('  ➡️ 最後の手段でBaidu検索を実行...');
-        const baiduResult = await searchBaidu(query);
-        
-        // Baidu結果をマージ
-        if (!mergedResult.instagramUrl && baiduResult.instagramUrl) {
-            mergedResult.instagramUrl = baiduResult.instagramUrl;
-        }
-        if (!mergedResult.email && baiduResult.email) {
-            mergedResult.email = baiduResult.email;
-        }
-        if (!mergedResult.homepageUrl && baiduResult.homepageUrl) {
-            mergedResult.homepageUrl = baiduResult.homepageUrl;
-        }
-    } else {
-        console.log('  ⚠️  Baidu検索は無効化されているためスキップ');
-    }
     
     // 最終統合結果を表示
     console.log(`  🔄 最終統合検索結果: Instagram=${mergedResult.instagramUrl ? '✓' : '✗'}, Email=${mergedResult.email ? '✓' : '✗'}, Phone=${mergedResult.phoneNumber ? '✓' : '✗'}, Homepage=${mergedResult.homepageUrl ? '✓' : '✗'}`);
