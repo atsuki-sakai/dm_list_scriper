@@ -44,6 +44,57 @@ export function cleanInstagramUrl(url: string): string | null {
 }
 
 /**
+ * サロン名からInstagram検索用のクエリを生成
+ * @param salonName サロン名
+ * @returns 検索クエリの配列（1つのみ）
+ */
+export function generateInstagramSearchQueries(salonName: string): string[] {
+    // ヘアサロンを先頭に付けたクエリを生成（ベースクエリと統一）
+    return [`ヘアサロン ${salonName} instagram`];
+}
+
+/**
+ * Instagram URLの関連度を計算（簡易版）
+ * @param instagramUrl Instagram URL
+ * @param salonName サロン名
+ * @returns 関連度スコア（0-1）
+ */
+export function calculateInstagramRelevance(instagramUrl: string, salonName: string): number {
+    if (!instagramUrl || !salonName) return 0;
+    
+    // Instagram URLからユーザー名を抽出
+    const usernameMatch = instagramUrl.match(/instagram\.com\/([a-zA-Z0-9_\.]+)/);
+    if (!usernameMatch || !usernameMatch[1]) return 0;
+    
+    const username = usernameMatch[1].toLowerCase();
+    const salonLower = salonName.toLowerCase();
+    
+    // 1. 直接文字列比較
+    if (username.includes(salonLower) || salonLower.includes(username)) {
+        return 0.9;
+    }
+    
+    // 2. 括弧内の英語表記との比較
+    const englishMatch = salonName.match(/\(([A-Za-z\s]+)\)/);
+    if (englishMatch && englishMatch[1]) {
+        const englishName = englishMatch[1].trim().toLowerCase();
+        if (username.includes(englishName) || englishName.includes(username)) {
+            return 0.8;
+        }
+    }
+    
+    // 3. 基本的な部分マッチング
+    const salonWords = salonName.replace(/[（）()]/g, '').split(/\s+/);
+    for (const word of salonWords) {
+        if (word.length >= 3 && username.includes(word.toLowerCase())) {
+            return 0.6;
+        }
+    }
+    
+    return 0;
+}
+
+/**
  * テキストからInstagram URLを抽出する（改善版）
  * @param text 検索対象のテキスト
  * @returns 抽出されたInstagram URLの配列
@@ -126,9 +177,10 @@ export function extractInstagramUrls(text: string): string[] {
 /**
  * Google検索結果からInstagram URLを抽出する（統合版）
  * @param searchItem Google検索結果のアイテム
- * @returns 抽出されたInstagram URL（最初に見つかったもの）
+ * @param salonName サロン名（関連度計算用）
+ * @returns 抽出されたInstagram URLと関連度スコア
  */
-export function extractInstagramFromSearchItem(searchItem: any): string | null {
+export function extractInstagramFromSearchItem(searchItem: any, salonName?: string): { url: string; relevance: number } | null {
     const title = searchItem.title || '';
     const link = searchItem.link || '';
     const snippet = searchItem.snippet || '';
@@ -139,31 +191,48 @@ export function extractInstagramFromSearchItem(searchItem: any): string | null {
         ogUrl = searchItem.pagemap.metatags[0]['og:url'] || '';
     }
     
+    let extractedUrl: string | null = null;
+    
     // まず直接リンクをチェック
     if (link.includes('instagram.com')) {
         const cleanUrl = cleanInstagramUrl(link);
         if (cleanUrl) {
-            return cleanUrl;
+            extractedUrl = cleanUrl;
         }
     }
     
     // 次にOG URLをチェック
-    if (ogUrl.includes('instagram.com')) {
+    if (!extractedUrl && ogUrl.includes('instagram.com')) {
         const cleanUrl = cleanInstagramUrl(ogUrl);
         if (cleanUrl) {
-            return cleanUrl;
+            extractedUrl = cleanUrl;
         }
     }
     
     // テキスト全体を検索
-    const fullText = `${title} ${snippet} ${link} ${ogUrl}`;
-    const urls = extractInstagramUrls(fullText);
-    
-    if (urls.length > 0) {
-        console.log(`    📱 Instagram URL抽出成功: ${urls[0]}`);
-        console.log(`    📱 抽出元: "${fullText.substring(0, 100)}..."`);
-        return urls[0];
+    if (!extractedUrl) {
+        const fullText = `${title} ${snippet} ${link} ${ogUrl}`;
+        const urls = extractInstagramUrls(fullText);
+        
+        if (urls.length > 0) {
+            extractedUrl = urls[0];
+        }
     }
     
-    return null;
+    if (!extractedUrl) {
+        return null;
+    }
+    
+    // 関連度を計算
+    let relevance = 0.5; // デフォルト関連度
+    if (salonName) {
+        relevance = calculateInstagramRelevance(extractedUrl, salonName);
+    }
+    
+    console.log(`    📱 Instagram URL抽出成功: ${extractedUrl} (関連度: ${(relevance * 100).toFixed(1)}%)`);
+    
+    return {
+        url: extractedUrl,
+        relevance: relevance
+    };
 } 
