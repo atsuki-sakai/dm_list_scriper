@@ -12,6 +12,7 @@ import {
 } from '../services/userInput';
 import { displaySalonDetails, displayError, displayProgress } from '../services/display';
 import { processBulkSalons } from './bulkSalonController';
+import { AreaSelectionResult } from '../types/index';
 
 // ======================= サロンコントローラー ========================
 
@@ -39,8 +40,9 @@ export async function processSalonDetails(salonUrl: string): Promise<void> {
 /**
  * リストページからサロンを選択して詳細を取得
  * @param listUrl リストページのURL
+ * @param areaSelection エリア選択情報（CSV出力用）
  */
-export async function processListing(listUrl: string): Promise<void> {
+export async function processListing(listUrl: string, areaSelection?: AreaSelectionResult): Promise<void> {
     try {
         displayProgress('最終ページを解析中...');
         
@@ -71,12 +73,12 @@ export async function processListing(listUrl: string): Promise<void> {
                 
             case '4':
                 // バルク処理（50%のサロンをCSV出力）
-                await processBulkSalons(listUrl, 0.5);
+                await processBulkSalons(listUrl, 0.5, areaSelection);
                 return; // バルク処理は完了したので関数を終了
                 
             case '5':
                 // 全件バルク処理（100%のサロンをCSV出力）
-                await processBulkSalons(listUrl, 1.0);
+                await processBulkSalons(listUrl, 1.0, areaSelection);
                 return; // 100%処理完了後に終了
                 
             default:
