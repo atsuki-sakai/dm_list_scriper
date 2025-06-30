@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { GoogleSearchResult } from '../types/index';
+import { GoogleSearchResult, GoogleBusinessInfo } from '../types/index';
 import { sleep, calculateRelevanceScore } from '../utils/index';
 import { BRING_SEARCH, YAHOO_SEARCH } from '../constants/index';
 import { 
@@ -97,6 +97,171 @@ function isGoogleApiAvailable(): boolean {
 }
 
 /**
+ * Google Business情報を抽出する
+ * @param item Google Custom Search APIの検索結果アイテム
+ * @returns Google Business情報
+ */
+function extractGoogleBusinessInfo(item: any): GoogleBusinessInfo {
+    const businessInfo: GoogleBusinessInfo = {};
+    
+    const snippet = item.snippet || '';
+    const title = item.title || '';
+    const pagemap = item.pagemap || {};
+    
+    // pagemapから構造化データを抽出
+    if (pagemap.metatags && pagemap.metatags.length > 0) {
+        const metatag = pagemap.metatags[0];
+        
+        // Business情報を抽出
+        if (metatag['og:title']) {
+            // タイトルから評価を抽出
+            const ratingMatch = metatag['og:title'].match(/★?(\d+\.?\d*)/);
+            if (ratingMatch) {
+                businessInfo.rating = parseFloat(ratingMatch[1]);
+            }
+        }
+        
+        if (metatag['og:description']) {
+            // 説明文からビジネス情報を抽出
+            const description = metatag['og:description'];
+            
+            // 営業時間の抽出
+            const hoursPatterns = [
+                /営業時間[：:]\s*([^。]+)/,
+                /時間[：:]\s*([^。]+)/,
+                /(\d{1,2}:\d{2}[^\d]+\d{1,2}:\d{2})/
+            ];
+            
+            for (const pattern of hoursPatterns) {
+                const match = description.match(pattern);
+                if (match) {
+                    businessInfo.businessHours = match[1].trim();
+                    break;
+                }
+            }
+            
+            // カテゴリ情報の抽出
+            const categories = [];
+            const categoryKeywords = ['美容室', 'ヘアサロン', 'salon', 'hair', 'beauty', 'カット', 'パーマ', 'カラー'];
+            for (const keyword of categoryKeywords) {
+                if (description.toLowerCase().includes(keyword.toLowerCase())) {
+                    categories.push(keyword);
+                }
+            }
+            if (categories.length > 0) {
+                businessInfo.categories = categories;
+            }
+        }
+    }
+    
+    // スニペットから情報を抽出
+    const combinedText = `${title} ${snippet}`;
+    
+    // 評価の抽出
+    if (!businessInfo.rating) {
+        const ratingPatterns = [
+            /★\s*(\d+\.?\d*)/,
+            /評価[：:]\s*(\d+\.?\d*)/,
+            /レビュー[：:]\s*(\d+\.?\d*)/,
+            /(\d+\.?\d*)\s*つ星/,
+            /(\d+\.?\d*)\/5/
+        ];
+        
+        for (const pattern of ratingPatterns) {
+            const match = combinedText.match(pattern);
+            if (match) {
+                businessInfo.rating = parseFloat(match[1]);
+                break;
+            }
+        }
+    }
+    
+    // レビュー数の抽出
+    const reviewPatterns = [
+        /(\d+)\s*件?のレビュー/,
+        /(\d+)\s*レビュー/,
+        /(\d+)\s*reviews/i,
+        /(\d+)\s*口コミ/
+    ];
+    
+    for (const pattern of reviewPatterns) {
+        const match = combinedText.match(pattern);
+        if (match) {
+            businessInfo.reviewCount = parseInt(match[1]);
+            break;
+        }
+    }
+    
+    // 営業時間の抽出（スニペットから）
+    if (!businessInfo.businessHours) {
+        const hoursPatterns = [
+            /営業時間[：:]\s*([^。\n]+)/,
+            /時間[：:]\s*([^。\n]+)/,
+            /(\d{1,2}:\d{2}[～\-~]\d{1,2}:\d{2})/,
+            /(月|火|水|木|金|土|日).*(開店|閉店|\d{1,2}:\d{2})/
+        ];
+        
+        for (const pattern of hoursPatterns) {
+            const match = combinedText.match(pattern);
+            if (match) {
+                businessInfo.businessHours = match[1].trim();
+                break;
+            }
+        }
+    }
+    
+    // 営業状況の抽出
+    const statusPatterns = [
+        /(営業中|営業時間外|一時休業|閉店|休業中)/,
+        /(開店|閉店)\s*(\d{1,2}:\d{2})/
+    ];
+    
+    for (const pattern of statusPatterns) {
+        const match = combinedText.match(pattern);
+        if (match) {
+            businessInfo.businessStatus = match[1];
+            break;
+        }
+    }
+    
+    // 住所の抽出
+    const addressPatterns = [
+        /〒?\d{3}-?\d{4}\s*([^。\n]+)/,
+        /(東京都|大阪府|京都府|神奈川県|埼玉県|千葉県|愛知県|兵庫県|福岡県|北海道|宮城県|広島県|静岡県|茨城県|栃木県|群馬県|山梨県|長野県|新潟県|富山県|石川県|福井県|岐阜県|三重県|滋賀県|奈良県|和歌山県|鳥取県|島根県|岡山県|山口県|徳島県|香川県|愛媛県|高知県|佐賀県|長崎県|熊本県|大分県|宮崎県|鹿児島県|沖縄県)[^。\n]+/
+    ];
+    
+    for (const pattern of addressPatterns) {
+        const match = combinedText.match(pattern);
+        if (match) {
+            businessInfo.address = match[0].trim();
+            break;
+        }
+    }
+    
+    // 電話番号の抽出
+    const phonePatterns = [
+        /0\d{1,4}[-\s]\d{1,4}[-\s]\d{3,4}/,
+        /TEL[：:]\s*(0\d{1,4}[-\s]\d{1,4}[-\s]\d{3,4})/,
+        /電話[：:]\s*(0\d{1,4}[-\s]\d{1,4}[-\s]\d{3,4})/
+    ];
+    
+    for (const pattern of phonePatterns) {
+        const match = combinedText.match(pattern);
+        if (match) {
+            businessInfo.phoneNumber = match[1] || match[0];
+            break;
+        }
+    }
+    
+    // ウェブサイトの抽出
+    if (item.link && !item.link.includes('google.com')) {
+        businessInfo.website = item.link;
+    }
+    
+    return businessInfo;
+}
+
+/**
  * Google Custom Search APIを使用してInstagram URLとメールアドレスと電話番号を抽出（複数候補対応）
  * @param query 検索クエリ
  * @param salonName サロン名（関連度フィルタリング用）
@@ -125,6 +290,7 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
         const emailCandidates: string[] = [];
         const phoneNumberCandidates: string[] = [];
         const homepageCandidates: string[] = [];
+        let googleBusinessInfo: GoogleBusinessInfo | undefined;
 
         if (data.items && data.items.length > 0) {
             console.log(`    🔍 Google API 検索結果: ${data.items.length}件`);
@@ -193,6 +359,33 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                     }
                 }
 
+                // Google Business情報を抽出（優先的にチェック）
+                if (!googleBusinessInfo) {
+                    // Google My Businessのリンクまたはビジネス情報を含む可能性がある場合
+                    const isBusinessInfo = link.includes('google.com/maps') || 
+                                         link.includes('maps.google.com') ||
+                                         title.toLowerCase().includes('google') ||
+                                         snippet.includes('営業時間') || 
+                                         snippet.includes('評価') ||
+                                         snippet.includes('レビュー') ||
+                                         snippet.includes('★') ||
+                                         snippet.includes('電話') ||
+                                         snippet.includes('TEL') ||
+                                         snippet.match(/\d{1,2}:\d{2}/); // 時間のパターン
+                    
+                    if (isBusinessInfo) {
+                        const businessInfo = extractGoogleBusinessInfo(item);
+                        if (Object.keys(businessInfo).length > 0) {
+                            googleBusinessInfo = businessInfo;
+                            console.log(`    🏢 Google Business情報発見:`);
+                            if (businessInfo.rating) console.log(`      ⭐ 評価: ${businessInfo.rating}`);
+                            if (businessInfo.reviewCount) console.log(`      📝 レビュー数: ${businessInfo.reviewCount}`);
+                            if (businessInfo.businessHours) console.log(`      🕒 営業時間: ${businessInfo.businessHours}`);
+                            if (businessInfo.businessStatus) console.log(`      📊 営業状況: ${businessInfo.businessStatus}`);
+                        }
+                    }
+                }
+
                 // ホームページURLを検索
                 if (link && !link.includes('instagram.com') && !link.includes('hotpepper.jp') && 
                     !link.includes('google.com') && !link.includes('facebook.com') && 
@@ -220,6 +413,22 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
             result.phoneNumberCandidates = phoneNumberCandidates;
             result.homepageCandidates = homepageCandidates;
             
+            // Google Business情報を追加
+            if (googleBusinessInfo) {
+                result.googleBusinessInfo = googleBusinessInfo;
+                console.log(`    ✅ Google Business情報を設定しました`);
+                
+                // Google Business情報から不足している情報を補完
+                if (!result.phoneNumber && googleBusinessInfo.phoneNumber) {
+                    result.phoneNumber = googleBusinessInfo.phoneNumber;
+                    console.log(`    📞 Google Businessから電話番号を補完: ${result.phoneNumber}`);
+                }
+                if (!result.homepageUrl && googleBusinessInfo.website) {
+                    result.homepageUrl = googleBusinessInfo.website;
+                    console.log(`    🏠 Google Businessからウェブサイトを補完: ${result.homepageUrl}`);
+                }
+            }
+            
             // 最も関連度の高いものを設定
             if (instagramCandidates.length > 0) {
                 result.instagramUrl = instagramCandidates[0].url;
@@ -241,7 +450,7 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
             console.log(`    ❌ Google API検索結果が見つかりませんでした`);
         }
 
-        console.log(`  🔍 Google API検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'} (候補${(result.instagramCandidates || []).length}件), Email=${result.email ? '✓' : '✗'} (候補${(result.emailCandidates || []).length}件), Phone=${result.phoneNumber ? '✓' : '✗'} (候補${(result.phoneNumberCandidates || []).length}件)`);
+        console.log(`  🔍 Google API検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'} (候補${(result.instagramCandidates || []).length}件), Email=${result.email ? '✓' : '✗'} (候補${(result.emailCandidates || []).length}件), Phone=${result.phoneNumber ? '✓' : '✗'} (候補${(result.phoneNumberCandidates || []).length}件), GoogleBusiness=${result.googleBusinessInfo ? '✓' : '✗'}`);
         
         return result;
         
@@ -391,6 +600,24 @@ function mergeSearchResults(instagramResult: GoogleSearchResult, businessResult:
     merged.phoneNumber = businessResult.phoneNumber || instagramResult.phoneNumber;
     merged.homepageUrl = businessResult.homepageUrl || instagramResult.homepageUrl;
     
+    // Google Business情報はどちらにもある可能性があるため、より完全な方を優先
+    if (businessResult.googleBusinessInfo || instagramResult.googleBusinessInfo) {
+        const businessInfo = businessResult.googleBusinessInfo;
+        const instagramInfo = instagramResult.googleBusinessInfo;
+        
+        if (businessInfo && instagramInfo) {
+            // 両方ある場合は、より多くの情報を持つ方を優先してマージ
+            merged.googleBusinessInfo = {
+                ...instagramInfo,
+                ...businessInfo // ビジネス検索結果の方を優先
+            };
+            console.log(`    🔄 Google Business情報をマージしました`);
+        } else {
+            merged.googleBusinessInfo = businessInfo || instagramInfo;
+            console.log(`    ✅ Google Business情報を設定: ${businessInfo ? 'ビジネス検索' : 'Instagram検索'}から`);
+        }
+    }
+    
     // 候補情報をマージ（重複排除）
     const mergeArrays = (arr1?: string[], arr2?: string[]) => {
         const combined = [...(arr1 || []), ...(arr2 || [])];
@@ -451,6 +678,18 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
     if (mergedResult.email) summaryItems.push('メール');
     if (mergedResult.phoneNumber) summaryItems.push('電話番号');
     if (mergedResult.homepageUrl) summaryItems.push('ホームページ');
+    if (mergedResult.googleBusinessInfo) {
+        const businessItems: string[] = [];
+        if (mergedResult.googleBusinessInfo.rating) businessItems.push('評価');
+        if (mergedResult.googleBusinessInfo.reviewCount) businessItems.push('レビュー数');
+        if (mergedResult.googleBusinessInfo.businessHours) businessItems.push('営業時間');
+        if (mergedResult.googleBusinessInfo.businessStatus) businessItems.push('営業状況');
+        if (businessItems.length > 0) {
+            summaryItems.push(`Google Business(${businessItems.join(', ')})`);
+        } else {
+            summaryItems.push('Google Business');
+        }
+    }
     
     console.log(`  🎯 2段階検索完了！取得成功: ${summaryItems.length > 0 ? summaryItems.join(', ') : 'なし'}`);
     
