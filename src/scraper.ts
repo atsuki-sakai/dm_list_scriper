@@ -30,15 +30,15 @@ async function main(): Promise<void> {
         displayWelcome();
 
         // 2. エリア選択フローを実行
-        const finalUrl = await processAreaSelection();
+        const areaSelectionResult = await processAreaSelection();
         
-        if (!finalUrl) {
+        if (!areaSelectionResult) {
             console.log('プログラムを終了します。');
             return;
         }
 
-        console.log(`\n✓ 最終選択されたエリアURL: ${finalUrl}`);
-        await processListing(finalUrl);
+        console.log(`\n✓ 最終選択されたエリアURL: ${areaSelectionResult.url}`);
+        await processListing(areaSelectionResult.url, areaSelectionResult);
 
     } catch (error) {
         displayError('メイン処理でエラーが発生しました', error);
