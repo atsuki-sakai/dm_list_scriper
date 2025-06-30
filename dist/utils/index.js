@@ -5,6 +5,7 @@ exports.resolveUrl = resolveUrl;
 exports.extractQueryParam = extractQueryParam;
 exports.removeDuplicates = removeDuplicates;
 exports.normalizeText = normalizeText;
+exports.calculateRelevanceScore = calculateRelevanceScore;
 const node_url_1 = require("node:url");
 // ======================= ユーティリティ関数 ========================
 /**
@@ -56,4 +57,92 @@ function removeDuplicates(array, keyFn) {
  */
 function normalizeText(text) {
     return text.replace(/\s+/g, ' ').trim();
+}
+/**
+ * サロン名とURL/テキストの関連度を計算する
+ * @param salonName サロン名
+ * @param candidate 候補URL/テキスト
+ * @returns 関連度スコア（0-1、高いほど関連性あり）
+ */
+function calculateRelevanceScore(salonName, candidate) {
+    // サロン名を正規化（カタカナ、英数字、記号を標準化）
+    const normalizedSalonName = normalizeName(salonName);
+    const normalizedCandidate = normalizeName(candidate);
+    // 完全一致ボーナス
+    if (normalizedCandidate.includes(normalizedSalonName)) {
+        return 0.9;
+    }
+    // サロン名から主要なキーワードを抽出
+    const salonKeywords = extractKeywords(normalizedSalonName);
+    const candidateKeywords = extractKeywords(normalizedCandidate);
+    // キーワードマッチング計算
+    let matchScore = 0;
+    let totalKeywords = salonKeywords.length;
+    for (const keyword of salonKeywords) {
+        if (keyword.length >= 2) { // 2文字以上のキーワードのみ評価
+            for (const candidateKeyword of candidateKeywords) {
+                if (candidateKeyword.includes(keyword) || keyword.includes(candidateKeyword)) {
+                    matchScore += 1;
+                    break;
+                }
+            }
+        }
+    }
+    // 英語名とカタカナ名の変換チェック
+    const translationScore = checkTranslationMatch(normalizedSalonName, normalizedCandidate);
+    // 最終スコア計算（0-1の範囲）
+    const keywordScore = totalKeywords > 0 ? (matchScore / totalKeywords) : 0;
+    const finalScore = Math.max(keywordScore, translationScore);
+    return Math.min(finalScore, 1.0);
+}
+/**
+ * 名前を正規化する（カタカナ統一、記号除去等）
+ */
+function normalizeName(name) {
+    return name
+        .toLowerCase()
+        .replace(/[()（）\[\]【】「」『』<>《》〈〉]/g, '') // 括弧類を除去
+        .replace(/[・･]/g, '') // 中点を除去
+        .replace(/[&＆]/g, 'and') // ＆をandに変換
+        .replace(/\s+/g, '') // 空白を除去
+        .replace(/[ァ-ヶ]/g, (match) => {
+        return String.fromCharCode(match.charCodeAt(0) - 0x60);
+    });
+}
+/**
+ * キーワードを抽出する
+ */
+function extractKeywords(text) {
+    // サロン関連の一般的な単語は除外
+    const excludeWords = ['美容室', 'ヘアサロン', 'salon', 'hair', 'beauty', '店', 'ショップ', 'shop'];
+    // 単語分割（スペース、記号で分割）
+    const words = text.split(/[^a-z0-9ぁ-んァ-ヶ一-龯]/i).filter(word => word.length >= 2 && !excludeWords.includes(word.toLowerCase()));
+    return words;
+}
+/**
+ * 英語⇔カタカナの変換マッチングをチェック
+ */
+function checkTranslationMatch(salonName, candidate) {
+    // 簡単な英語⇔カタカナ変換例
+    const commonTranslations = [
+        { en: 'hair', ja: 'ヘア' },
+        { en: 'salon', ja: 'サロン' },
+        { en: 'beauty', ja: 'ビューティー' },
+        { en: 'cut', ja: 'カット' },
+        { en: 'style', ja: 'スタイル' },
+        { en: 'mode', ja: 'モード' },
+        { en: 'charm', ja: 'シャルム' },
+        { en: 'bob', ja: 'ボブ' },
+        { en: 'slow', ja: 'スロウ' },
+        { en: 'slow', ja: 'スロー' },
+        { en: 'spa', ja: 'スパ' },
+    ];
+    let translationMatches = 0;
+    for (const { en, ja } of commonTranslations) {
+        if ((salonName.includes(ja) && candidate.includes(en)) ||
+            (salonName.includes(en) && candidate.includes(ja))) {
+            translationMatches++;
+        }
+    }
+    return translationMatches > 0 ? 0.7 : 0;
 }

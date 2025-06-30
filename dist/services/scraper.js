@@ -329,27 +329,41 @@ async function getAllSalons(baseUrl) {
         const maxPageMatch = lastPageUrl.match(/PN=(\d+)/);
         const maxPage = maxPageMatch ? parseInt(maxPageMatch[1]) : 1;
         console.log(`📊 総ページ数: ${maxPage}ページ`);
-        // 各ページからサロンを取得
-        // ページ URL 生成に使用するプレフィックスを決定
-        let pagePrefix;
-        const prefixMatch = lastPageUrl.match(/^(.*[?&])PN=\d+/);
-        if (prefixMatch) {
-            pagePrefix = prefixMatch[1];
-        }
-        else {
-            // baseUrl が既にクエリを含む場合は &、無い場合は ?
-            pagePrefix = baseUrl.includes('?') ? `${baseUrl}&PN=` : `${baseUrl}?PN=`;
-        }
-        for (let page = 1; page <= maxPage; page++) {
-            console.log(`🔍 ページ ${page}/${maxPage} を処理中...`);
-            const pageUrl = page === 1 ? baseUrl : `${pagePrefix}${page}`;
-            const pageSalons = await getSalonList(pageUrl);
-            allSalons.push(...pageSalons);
-            // レート制限を考慮して遅延
-            if (page < maxPage) {
-                await (0, index_1.sleep)(index_2.DELAY_MS);
+        // ------ ページを順に巡回 ------
+        const visited = new Set();
+        let currentUrl = baseUrl;
+        let page = 1;
+        while (true) {
+            console.log(`🔍 ページ ${page} を処理中...`);
+            if (visited.has(currentUrl)) {
+                console.warn('⚠️  同じURLを再訪しそうなのでループを終了します');
+                break;
             }
+            visited.add(currentUrl);
+            // 1ページ分のサロン取得
+            const pageSalons = await getSalonList(currentUrl);
+            allSalons.push(...pageSalons);
+            // ページ内に「次の20件」リンクがあるか判定
+            let nextHref;
+            try {
+                const { data } = await axios_1.default.get(currentUrl);
+                const $ = cheerio.load(data);
+                const nextAnchor = $('ul.paging.jscPagingParents li.afterPage a');
+                if (nextAnchor.length > 0) {
+                    nextHref = nextAnchor.attr('href');
+                }
+            }
+            catch (err) {
+                console.error('ページ解析に失敗:', err);
+            }
+            if (!nextHref) {
+                break; // 次ページ無し
+            }
+            currentUrl = (0, index_1.resolveUrl)(nextHref, currentUrl);
+            page++;
+            await (0, index_1.sleep)(index_2.DELAY_MS);
         }
+        console.log(`✅ 総ページ読込完了: ${page}ページ`);
         // 重複を除去
         const uniqueSalons = (0, index_1.removeDuplicates)(allSalons, salon => salon.cstt);
         console.log(`✅ 総サロン数: ${uniqueSalons.length}件を取得`);

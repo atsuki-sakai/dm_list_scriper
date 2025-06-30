@@ -41,17 +41,27 @@ const path = __importStar(require("path"));
 /**
  * サロン詳細情報をCSV形式でエクスポート
  * @param salons サロン詳細情報の配列
- * @param filename ファイル名（オプション）
+ * @param areaSelection エリア選択情報（ファイル名生成用）
+ * @param ratio 処理割合（0.5 = 50%, 1.0 = 100%）
+ * @param filename ファイル名（オプション、指定した場合はエリア情報は無視）
  * @returns 出力されたファイルパス
  */
-function exportToCSV(salons, filename) {
+function exportToCSV(salons, areaSelection, ratio, filename) {
     // ファイル名を生成（指定されていない場合）
     if (!filename) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        filename = `salon_details_${timestamp}.csv`;
+        if (areaSelection) {
+            // エリア名を使ったファイル名を生成
+            filename = generateAreaBasedFilename(areaSelection, ratio);
+        }
+        else {
+            // フォールバック: タイムスタンプベースのファイル名
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            filename = `salon_details_${timestamp}.csv`;
+        }
     }
     // CSVヘッダーを定義
     const headers = [
+        'インデックス',
         'サロン名',
         '住所',
         'アクセス',
@@ -66,13 +76,28 @@ function exportToCSV(salons, filename) {
         '備考',
         'その他',
         'Instagram URL',
+        'Instagram URL候補',
         'メールアドレス',
+        'メールアドレス候補',
+        '電話番号',
+        '電話番号候補',
+        'ホームページURL',
+        'ホームページURL候補',
+        'Google Business評価',
+        'Google Businessレビュー数',
+        'Google Business営業時間',
+        'Google Business営業状況',
+        'Google Business住所',
+        'Google Business電話番号',
+        'Google Businessウェブサイト',
+        'Google Businessカテゴリ',
         '検索クエリ'
     ];
-    // CSV行を生成
+    // CSV行を生成（インデックス付き - 下位の店舗から1番開始）
     const csvRows = [
         headers.join(','), // ヘッダー行
-        ...salons.map(salon => [
+        ...salons.map((salon, index) => [
+            escapeCSVField((index + 1).toString()), // インデックス（1から開始）
             escapeCSVField(salon.name),
             escapeCSVField(salon.address),
             escapeCSVField(salon.access),
@@ -87,7 +112,21 @@ function exportToCSV(salons, filename) {
             escapeCSVField(salon.remarks),
             escapeCSVField(salon.other),
             escapeCSVField(salon.instagramUrl || ''),
+            escapeCSVField(salon.instagramCandidates?.join('; ') || ''), // Instagram URL候補
             escapeCSVField(salon.email || ''),
+            escapeCSVField(salon.emailCandidates?.join('; ') || ''), // メールアドレス候補
+            escapeCSVField(salon.phoneNumber || ''),
+            escapeCSVField(salon.phoneNumberCandidates?.join('; ') || ''), // 電話番号候補
+            escapeCSVField(salon.homepageUrl || ''),
+            escapeCSVField(salon.homepageCandidates?.join('; ') || ''), // ホームページURL候補
+            escapeCSVField(salon.googleBusinessInfo?.rating?.toString() || ''), // Google Business評価
+            escapeCSVField(salon.googleBusinessInfo?.reviewCount?.toString() || ''), // Google Businessレビュー数
+            escapeCSVField(salon.googleBusinessInfo?.businessHours || ''), // Google Business営業時間
+            escapeCSVField(salon.googleBusinessInfo?.businessStatus || ''), // Google Business営業状況
+            escapeCSVField(salon.googleBusinessInfo?.address || ''), // Google Business住所
+            escapeCSVField(salon.googleBusinessInfo?.phoneNumber || ''), // Google Business電話番号
+            escapeCSVField(salon.googleBusinessInfo?.website || ''), // Google Businessウェブサイト
+            escapeCSVField(salon.googleBusinessInfo?.categories?.join('; ') || ''), // Google Businessカテゴリ
             escapeCSVField(salon.searchQuery)
         ].join(','))
     ];
@@ -107,6 +146,46 @@ function exportToCSV(salons, filename) {
         console.error('❌ CSVファイルの保存に失敗しました:', error);
         throw error;
     }
+}
+/**
+ * エリア情報を基にファイル名を生成
+ * @param areaSelection エリア選択情報
+ * @param ratio 処理割合（0.5 = 50%, 1.0 = 100%）
+ * @returns 生成されたファイル名
+ */
+function generateAreaBasedFilename(areaSelection, ratio) {
+    // ファイル名に不適切な文字を置換する関数
+    const sanitizeForFilename = (str) => {
+        return str
+            .replace(/[\/\\\?%\*:|"<>]/g, '') // ファイル名に使えない文字を削除
+            .replace(/\s+/g, '') // スペースを削除
+            .replace(/[\(\)]/g, ''); // 括弧も削除
+    };
+    const parts = [];
+    // メインエリア名を追加
+    if (areaSelection.mainAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.mainAreaName));
+    }
+    // サブエリア名を追加
+    if (areaSelection.subAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.subAreaName));
+    }
+    // 詳細エリア名を追加
+    if (areaSelection.detailAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.detailAreaName));
+    }
+    // 処理割合を追加（50%または100%）
+    if (ratio !== undefined) {
+        const percentage = Math.round(ratio * 100);
+        parts.push(`${percentage}%`);
+    }
+    // パーツが空の場合はフォールバック
+    if (parts.length === 0) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        return `salon_details_${timestamp}.csv`;
+    }
+    // "エリア_エリアの詳細_さらに詳細.csv" の形式で結合
+    return `${parts.join('_')}.csv`;
 }
 /**
  * CSV用にフィールドをエスケープ
@@ -135,8 +214,30 @@ function escapeCSVField(field) {
 function displayCSVStats(salons) {
     const instagramCount = salons.filter(s => s.instagramUrl).length;
     const emailCount = salons.filter(s => s.email).length;
+    const phoneCount = salons.filter(s => s.phoneNumber).length;
+    const homepageCount = salons.filter(s => s.homepageUrl).length;
+    // Google Business情報の統計
+    const googleBusinessCount = salons.filter(s => s.googleBusinessInfo).length;
+    const googleRatingCount = salons.filter(s => s.googleBusinessInfo?.rating).length;
+    const googleReviewCount = salons.filter(s => s.googleBusinessInfo?.reviewCount).length;
+    const googleHoursCount = salons.filter(s => s.googleBusinessInfo?.businessHours).length;
+    // 候補数も集計
+    const instagramCandidatesCount = salons.reduce((acc, s) => acc + (s.instagramCandidates?.length || 0), 0);
+    const emailCandidatesCount = salons.reduce((acc, s) => acc + (s.emailCandidates?.length || 0), 0);
+    const phoneCandidatesCount = salons.reduce((acc, s) => acc + (s.phoneNumberCandidates?.length || 0), 0);
+    const homepageCandidatesCount = salons.reduce((acc, s) => acc + (s.homepageCandidates?.length || 0), 0);
     console.log('\n📈 CSV出力統計:');
     console.log(`   総サロン数: ${salons.length}件`);
-    console.log(`   Instagram URL取得: ${instagramCount}件 (${Math.round(instagramCount / salons.length * 100)}%)`);
-    console.log(`   メールアドレス取得: ${emailCount}件 (${Math.round(emailCount / salons.length * 100)}%)`);
+    console.log(`   Instagram URL取得: ${instagramCount}件 (${Math.round(instagramCount / salons.length * 100)}%) | 候補総数: ${instagramCandidatesCount}件`);
+    console.log(`   メールアドレス取得: ${emailCount}件 (${Math.round(emailCount / salons.length * 100)}%) | 候補総数: ${emailCandidatesCount}件`);
+    console.log(`   電話番号取得: ${phoneCount}件 (${Math.round(phoneCount / salons.length * 100)}%) | 候補総数: ${phoneCandidatesCount}件`);
+    console.log(`   ホームページURL取得: ${homepageCount}件 (${Math.round(homepageCount / salons.length * 100)}%) | 候補総数: ${homepageCandidatesCount}件`);
+    console.log(`\n🏢 Google Business情報取得:`);
+    console.log(`   Google Business情報: ${googleBusinessCount}件 (${Math.round(googleBusinessCount / salons.length * 100)}%)`);
+    console.log(`   Google評価: ${googleRatingCount}件 (${Math.round(googleRatingCount / salons.length * 100)}%)`);
+    console.log(`   Google レビュー数: ${googleReviewCount}件 (${Math.round(googleReviewCount / salons.length * 100)}%)`);
+    console.log(`   Google営業時間: ${googleHoursCount}件 (${Math.round(googleHoursCount / salons.length * 100)}%)`);
+    console.log(`\n🎯 関連度フィルタリング効果:`);
+    console.log(`   Instagram: 平均 ${instagramCandidatesCount > 0 ? (instagramCandidatesCount / Math.max(salons.filter(s => s.instagramCandidates?.length).length, 1)).toFixed(1) : 0} 候補/サロン`);
+    console.log(`   Email: 平均 ${emailCandidatesCount > 0 ? (emailCandidatesCount / Math.max(salons.filter(s => s.emailCandidates?.length).length, 1)).toFixed(1) : 0} 候補/サロン`);
 }

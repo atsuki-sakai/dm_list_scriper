@@ -29,8 +29,9 @@ async function processSalonDetails(salonUrl) {
 /**
  * リストページからサロンを選択して詳細を取得
  * @param listUrl リストページのURL
+ * @param areaSelection エリア選択情報（CSV出力用）
  */
-async function processListing(listUrl) {
+async function processListing(listUrl, areaSelection) {
     try {
         (0, display_1.displayProgress)('最終ページを解析中...');
         // 最終ページのURLを取得
@@ -55,11 +56,11 @@ async function processListing(listUrl) {
                 break;
             case '4':
                 // バルク処理（50%のサロンをCSV出力）
-                await (0, bulkSalonController_1.processBulkSalons)(listUrl, 0.5);
+                await (0, bulkSalonController_1.processBulkSalons)(listUrl, 0.5, areaSelection);
                 return; // バルク処理は完了したので関数を終了
             case '5':
                 // 全件バルク処理（100%のサロンをCSV出力）
-                await (0, bulkSalonController_1.processBulkSalons)(listUrl, 1.0);
+                await (0, bulkSalonController_1.processBulkSalons)(listUrl, 1.0, areaSelection);
                 return; // 100%処理完了後に終了
             default:
                 console.log('デフォルトで最後のサロンを選択します。');
