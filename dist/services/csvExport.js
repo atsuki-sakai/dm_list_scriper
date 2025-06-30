@@ -68,9 +68,7 @@ function exportToCSV(salons, areaSelection, ratio, filename) {
         '営業時間',
         '定休日',
         'カット価格',
-        '席数',
         'スタッフ数',
-        '駐車場',
         '支払い方法',
         'こだわり条件',
         '備考',
@@ -78,7 +76,6 @@ function exportToCSV(salons, areaSelection, ratio, filename) {
         'Instagram URL',
         'Instagram URL候補',
         'メールアドレス',
-        'メールアドレス候補',
         '電話番号',
         '電話番号候補',
         'ホームページURL',
@@ -104,9 +101,7 @@ function exportToCSV(salons, areaSelection, ratio, filename) {
             escapeCSVField(salon.businessHours),
             escapeCSVField(salon.closedDays),
             escapeCSVField(salon.cutPrice),
-            escapeCSVField(salon.seatCount),
             escapeCSVField(salon.staffCount),
-            escapeCSVField(salon.parking),
             escapeCSVField(salon.paymentMethods),
             escapeCSVField(salon.features),
             escapeCSVField(salon.remarks),
@@ -114,7 +109,6 @@ function exportToCSV(salons, areaSelection, ratio, filename) {
             escapeCSVField(salon.instagramUrl || ''),
             escapeCSVField(salon.instagramCandidates?.join('; ') || ''), // Instagram URL候補
             escapeCSVField(salon.email || ''),
-            escapeCSVField(salon.emailCandidates?.join('; ') || ''), // メールアドレス候補
             escapeCSVField(salon.phoneNumber || ''),
             escapeCSVField(salon.phoneNumberCandidates?.join('; ') || ''), // 電話番号候補
             escapeCSVField(salon.homepageUrl || ''),
@@ -223,13 +217,12 @@ function displayCSVStats(salons) {
     const googleHoursCount = salons.filter(s => s.googleBusinessInfo?.businessHours).length;
     // 候補数も集計
     const instagramCandidatesCount = salons.reduce((acc, s) => acc + (s.instagramCandidates?.length || 0), 0);
-    const emailCandidatesCount = salons.reduce((acc, s) => acc + (s.emailCandidates?.length || 0), 0);
     const phoneCandidatesCount = salons.reduce((acc, s) => acc + (s.phoneNumberCandidates?.length || 0), 0);
     const homepageCandidatesCount = salons.reduce((acc, s) => acc + (s.homepageCandidates?.length || 0), 0);
     console.log('\n📈 CSV出力統計:');
     console.log(`   総サロン数: ${salons.length}件`);
     console.log(`   Instagram URL取得: ${instagramCount}件 (${Math.round(instagramCount / salons.length * 100)}%) | 候補総数: ${instagramCandidatesCount}件`);
-    console.log(`   メールアドレス取得: ${emailCount}件 (${Math.round(emailCount / salons.length * 100)}%) | 候補総数: ${emailCandidatesCount}件`);
+    console.log(`   メールアドレス取得: ${emailCount}件 (${Math.round(emailCount / salons.length * 100)}%)`);
     console.log(`   電話番号取得: ${phoneCount}件 (${Math.round(phoneCount / salons.length * 100)}%) | 候補総数: ${phoneCandidatesCount}件`);
     console.log(`   ホームページURL取得: ${homepageCount}件 (${Math.round(homepageCount / salons.length * 100)}%) | 候補総数: ${homepageCandidatesCount}件`);
     console.log(`\n🏢 Google Business情報取得:`);
@@ -239,5 +232,4 @@ function displayCSVStats(salons) {
     console.log(`   Google営業時間: ${googleHoursCount}件 (${Math.round(googleHoursCount / salons.length * 100)}%)`);
     console.log(`\n🎯 関連度フィルタリング効果:`);
     console.log(`   Instagram: 平均 ${instagramCandidatesCount > 0 ? (instagramCandidatesCount / Math.max(salons.filter(s => s.instagramCandidates?.length).length, 1)).toFixed(1) : 0} 候補/サロン`);
-    console.log(`   Email: 平均 ${emailCandidatesCount > 0 ? (emailCandidatesCount / Math.max(salons.filter(s => s.emailCandidates?.length).length, 1)).toFixed(1) : 0} 候補/サロン`);
 }

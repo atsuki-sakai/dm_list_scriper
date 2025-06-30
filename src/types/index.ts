@@ -27,9 +27,7 @@ export interface SalonDetails {
     closedDays: string;
     paymentMethods: string;
     cutPrice: string;
-    seatCount: string;
     staffCount: string;
-    parking: string;
     features: string;
     remarks: string;
     other: string;

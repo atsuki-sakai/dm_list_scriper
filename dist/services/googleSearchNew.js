@@ -220,9 +220,14 @@ function extractGoogleBusinessInfo(item) {
             break;
         }
     }
-    // ウェブサイトの抽出
-    if (item.link && !item.link.includes('google.com')) {
-        businessInfo.website = item.link;
+    // ウェブサイト情報の抽出
+    if (item.link && !item.link.includes('google.com') && !item.link.includes('hotpepper.jp')) {
+        const url = item.link;
+        const salonKeywords = ['美容室', 'ヘアサロン', 'salon', 'hair', 'beauty', 'cut', 'カット'];
+        const hasRelevantKeyword = salonKeywords.some(keyword => combinedText.toLowerCase().includes(keyword.toLowerCase()));
+        if (hasRelevantKeyword) {
+            businessInfo.website = url;
+        }
     }
     return businessInfo;
 }

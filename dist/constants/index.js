@@ -1,7 +1,7 @@
 "use strict";
 // ======================= 定数定義 ========================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SELECTORS = exports.DELAY_MS = exports.AREA_URL_MAP = void 0;
+exports.SELECTORS = exports.YAHOO_SEARCH = exports.BRING_SEARCH = exports.DELAY_MS = exports.AREA_URL_MAP = void 0;
 /** エリア名とHotPepper Beautyのエリア別トップページURLのマッピング */
 exports.AREA_URL_MAP = {
     '北海道': 'https://beauty.hotpepper.jp/svcSD/',
@@ -15,7 +15,10 @@ exports.AREA_URL_MAP = {
     '九州・沖縄': 'https://beauty.hotpepper.jp/svcSG/',
 };
 /** 遅延時間の定数 */
-exports.DELAY_MS = 1000;
+exports.DELAY_MS = 100;
+/** 検索エンジンの有効/無効 */
+exports.BRING_SEARCH = false;
+exports.YAHOO_SEARCH = false;
 /** CSSセレクタの定数 */
 exports.SELECTORS = {
     SUBAREAS: 'ul.routeMa a',

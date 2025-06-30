@@ -175,14 +175,8 @@ async function extractSalonDetails(salonUrl) {
                 case 'カット価格':
                     details.cutPrice = content;
                     break;
-                case '席数':
-                    details.seatCount = $row.find('td').eq(1).text().trim();
-                    break;
                 case 'スタッフ数':
                     details.staffCount = content;
-                    break;
-                case '駐車場':
-                    details.parking = $row.find('td').eq(1).text().trim();
                     break;
                 case 'こだわり条件':
                     details.features = content;
@@ -203,9 +197,7 @@ async function extractSalonDetails(salonUrl) {
             closedDays: details.closedDays || '',
             paymentMethods: details.paymentMethods || '',
             cutPrice: details.cutPrice || '',
-            seatCount: details.seatCount || '',
             staffCount: details.staffCount || '',
-            parking: details.parking || '',
             features: details.features || '',
             remarks: details.remarks || '',
             other: details.other || ''

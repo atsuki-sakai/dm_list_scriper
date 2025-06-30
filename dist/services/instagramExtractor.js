@@ -1,88 +1,83 @@
+"use strict";
 /**
  * Instagram URL抽出専用サービス
  * 検索結果からより確実にInstagram URLを抽出する
  */
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.cleanInstagramUrl = cleanInstagramUrl;
+exports.generateInstagramSearchQueries = generateInstagramSearchQueries;
+exports.calculateInstagramRelevance = calculateInstagramRelevance;
+exports.extractInstagramUrls = extractInstagramUrls;
+exports.extractInstagramFromSearchItem = extractInstagramFromSearchItem;
 // ======================= Instagram URL抽出 ========================
-
 /**
  * Instagram URLをクリーンアップして正規化する
  * @param url 生のURL
  * @returns クリーンアップされたInstagram URL または null
  */
-export function cleanInstagramUrl(url: string): string | null {
+function cleanInstagramUrl(url) {
     if (!url || !url.includes('instagram.com')) {
         return null;
     }
-    
     // URL正規化
     let cleanUrl = url.trim();
-    
     // HTTPSに統一
     if (cleanUrl.startsWith('http://')) {
         cleanUrl = cleanUrl.replace('http://', 'https://');
-    } else if (!cleanUrl.startsWith('https://')) {
+    }
+    else if (!cleanUrl.startsWith('https://')) {
         cleanUrl = 'https://' + cleanUrl.replace(/^\/+/, '');
     }
-    
     // ユーザー名を抽出（より厳密なパターン）
     const match = cleanUrl.match(/instagram\.com\/([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})(?:\/|$|\?)/);
     if (!match || !match[1] || match[1].length === 0) {
         return null;
     }
-    
     const username = match[1];
-    
     // 無効なユーザー名をフィルタリング
     const invalidUsernames = [
         'p', 'stories', 'reels', 'tv', 'explore', 'direct', 'accounts', 'developer',
         '.', '..', '...', '.com', 'com', 'www', 'http', 'https'
     ];
-    
     // 無効パターンのチェック
     if (invalidUsernames.includes(username) ||
         username.length < 1 || username.length > 30 ||
         username.startsWith('.') || username.endsWith('.') ||
-        username.includes('..') || 
+        username.includes('..') ||
         /^[._]+$/.test(username) || // ドットやアンダースコアのみ
         /\.(com|net|org|jp)$/i.test(username)) { // ドメイン拡張子で終わる
         return null;
     }
-    
     return `https://instagram.com/${username}`;
 }
-
 /**
  * サロン名からInstagram検索用のクエリを生成
  * @param salonName サロン名
  * @returns 検索クエリの配列（1つのみ）
  */
-export function generateInstagramSearchQueries(salonName: string): string[] {
+function generateInstagramSearchQueries(salonName) {
     // ヘアサロンを先頭に付けたクエリを生成（ベースクエリと統一）
     return [`ヘアサロン ${salonName} instagram`];
 }
-
 /**
  * Instagram URLの関連度を計算（簡易版）
  * @param instagramUrl Instagram URL
  * @param salonName サロン名
  * @returns 関連度スコア（0-1）
  */
-export function calculateInstagramRelevance(instagramUrl: string, salonName: string): number {
-    if (!instagramUrl || !salonName) return 0;
-    
+function calculateInstagramRelevance(instagramUrl, salonName) {
+    if (!instagramUrl || !salonName)
+        return 0;
     // Instagram URLからユーザー名を抽出
     const usernameMatch = instagramUrl.match(/instagram\.com\/([a-zA-Z0-9_\.]+)/);
-    if (!usernameMatch || !usernameMatch[1]) return 0;
-    
+    if (!usernameMatch || !usernameMatch[1])
+        return 0;
     const username = usernameMatch[1].toLowerCase();
     const salonLower = salonName.toLowerCase();
-    
     // 1. 直接文字列比較
     if (username.includes(salonLower) || salonLower.includes(username)) {
         return 0.9;
     }
-    
     // 2. 括弧内の英語表記との比較
     const englishMatch = salonName.match(/\(([A-Za-z\s]+)\)/);
     if (englishMatch && englishMatch[1]) {
@@ -91,7 +86,6 @@ export function calculateInstagramRelevance(instagramUrl: string, salonName: str
             return 0.8;
         }
     }
-    
     // 3. 基本的な部分マッチング
     const salonWords = salonName.replace(/[（）()]/g, '').split(/\s+/);
     for (const word of salonWords) {
@@ -99,18 +93,15 @@ export function calculateInstagramRelevance(instagramUrl: string, salonName: str
             return 0.6;
         }
     }
-    
     return 0;
 }
-
 /**
  * テキストからInstagram URLを抽出する（改善版）
  * @param text 検索対象のテキスト
  * @returns 抽出されたInstagram URLの配列
  */
-export function extractInstagramUrls(text: string): string[] {
-    const urls: string[] = [];
-    
+function extractInstagramUrls(text) {
+    const urls = [];
     // より包括的なInstagram URL抽出パターン
     const patterns = [
         // 完全なURL形式
@@ -130,13 +121,11 @@ export function extractInstagramUrls(text: string): string[] {
         // 日本語文脈でのアカウント名抽出
         /(?:アカウント|account)[\s:：]*[@]?([a-zA-Z0-9_\.]+)/gi,
     ];
-    
     for (const pattern of patterns) {
         const matches = text.match(pattern);
         if (matches) {
             for (const match of matches) {
                 let candidateUrl = match.trim();
-                
                 // 特殊パターンの処理
                 if (candidateUrl.includes('›')) {
                     // パンくずリスト形式
@@ -144,38 +133,43 @@ export function extractInstagramUrls(text: string): string[] {
                     if (usernameMatch && usernameMatch[1]) {
                         candidateUrl = `https://instagram.com/${usernameMatch[1]}`;
                     }
-                } else if (candidateUrl.match(/instagram|インスタ/i) && candidateUrl.includes('(')) {
+                }
+                else if (candidateUrl.match(/instagram|インスタ/i) && candidateUrl.includes('(')) {
                     // 括弧内アカウント名
                     const usernameMatch = candidateUrl.match(/[\(（]([a-zA-Z0-9_\.]+)[\)）]/);
                     if (usernameMatch && usernameMatch[1]) {
                         candidateUrl = `https://instagram.com/${usernameMatch[1]}`;
                     }
-                } else if (candidateUrl.match(/instagram|インスタ|account|アカウント/i)) {
+                }
+                else if (candidateUrl.match(/instagram|インスタ|account|アカウント/i)) {
                     // テキスト内のアカウント名抽出
                     const usernameMatch = candidateUrl.match(/(?:instagram|インスタ|インスタグラム|account|アカウント)[\s:：\-]*[@]?([a-zA-Z0-9_\.]+)/i);
                     if (usernameMatch && usernameMatch[1]) {
                         candidateUrl = `https://instagram.com/${usernameMatch[1]}`;
                     }
-                } else if (candidateUrl.startsWith('@')) {
+                }
+                else if (candidateUrl.startsWith('@')) {
                     // @ユーザー名形式
                     candidateUrl = `https://instagram.com/${candidateUrl.substring(1)}`;
-                } else if (candidateUrl.includes('instagram.com/') && !candidateUrl.startsWith('http')) {
+                }
+                else if (candidateUrl.includes('instagram.com/') && !candidateUrl.startsWith('http')) {
                     // URLプロトコル補完
                     candidateUrl = 'https://' + candidateUrl;
-                } else if (candidateUrl.match(/^[a-zA-Z0-9_][a-zA-Z0-9_.]{0,29}$/) && candidateUrl.length > 1) {
+                }
+                else if (candidateUrl.match(/^[a-zA-Z0-9_][a-zA-Z0-9_.]{0,29}$/) && candidateUrl.length > 1) {
                     // ユーザー名のみの場合（Instagram文脈で発見された場合のみ）
                     // 無効なパターンを除外
                     const invalidPatterns = ['.', '..', '...', '.com', 'com', 'www'];
-                    if (!invalidPatterns.includes(candidateUrl) && 
+                    if (!invalidPatterns.includes(candidateUrl) &&
                         !candidateUrl.startsWith('.') && !candidateUrl.endsWith('.') &&
                         !/\.(com|net|org)$/i.test(candidateUrl) &&
                         (text.toLowerCase().includes('instagram') || text.toLowerCase().includes('インスタ'))) {
                         candidateUrl = `https://instagram.com/${candidateUrl}`;
-                    } else {
+                    }
+                    else {
                         continue; // 無効パターンまたはInstagram文脈でない場合はスキップ
                     }
                 }
-                
                 // URLをクリーンアップ
                 const cleanUrl = cleanInstagramUrl(candidateUrl);
                 if (cleanUrl && !urls.includes(cleanUrl)) {
@@ -184,29 +178,24 @@ export function extractInstagramUrls(text: string): string[] {
             }
         }
     }
-    
     return urls;
 }
-
 /**
  * Google検索結果からInstagram URLを抽出する（統合版）
  * @param searchItem Google検索結果のアイテム
  * @param salonName サロン名（関連度計算用）
  * @returns 抽出されたInstagram URLと関連度スコア
  */
-export function extractInstagramFromSearchItem(searchItem: any, salonName?: string): { url: string; relevance: number } | null {
+function extractInstagramFromSearchItem(searchItem, salonName) {
     const title = searchItem.title || '';
     const link = searchItem.link || '';
     const snippet = searchItem.snippet || '';
-    
     // OG URL取得
     let ogUrl = '';
     if (searchItem.pagemap && searchItem.pagemap.metatags && searchItem.pagemap.metatags.length > 0) {
         ogUrl = searchItem.pagemap.metatags[0]['og:url'] || '';
     }
-    
-    let extractedUrl: string | null = null;
-    
+    let extractedUrl = null;
     // まず直接リンクをチェック
     if (link.includes('instagram.com')) {
         const cleanUrl = cleanInstagramUrl(link);
@@ -214,7 +203,6 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
             extractedUrl = cleanUrl;
         }
     }
-    
     // 次にOG URLをチェック
     if (!extractedUrl && ogUrl.includes('instagram.com')) {
         const cleanUrl = cleanInstagramUrl(ogUrl);
@@ -222,31 +210,25 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
             extractedUrl = cleanUrl;
         }
     }
-    
     // テキスト全体を検索
     if (!extractedUrl) {
         const fullText = `${title} ${snippet} ${link} ${ogUrl}`;
         const urls = extractInstagramUrls(fullText);
-        
         if (urls.length > 0) {
             extractedUrl = urls[0];
         }
     }
-    
     if (!extractedUrl) {
         return null;
     }
-    
     // 関連度を計算
     let relevance = 0.5; // デフォルト関連度
     if (salonName) {
         relevance = calculateInstagramRelevance(extractedUrl, salonName);
     }
-    
     console.log(`    📱 Instagram URL抽出成功: ${extractedUrl} (関連度: ${(relevance * 100).toFixed(1)}%)`);
-    
     return {
         url: extractedUrl,
         relevance: relevance
     };
-} 
+}

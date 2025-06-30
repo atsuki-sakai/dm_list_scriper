@@ -42,29 +42,22 @@ async function processListing(listUrl, areaSelection) {
         let salonUrl;
         switch (choice.trim()) {
             case '1':
-                // 従来通り最後のサロンを取得
-                salonUrl = await (0, scraper_1.getLastSalonUrl)(lastPageUrl);
-                break;
-            case '2':
                 // サロン名で検索
                 const targetName = await (0, userInput_1.askQuestion)('検索するサロン名を入力してください: ');
                 salonUrl = await (0, scraper_1.findSalonByName)(lastPageUrl, targetName + ' インスタグラム instagram');
                 break;
-            case '3':
-                // 全サロン一覧を表示してユーザーに選択させる
-                salonUrl = await selectFromSalonList(lastPageUrl);
-                break;
-            case '4':
+            case '2':
                 // バルク処理（50%のサロンをCSV出力）
                 await (0, bulkSalonController_1.processBulkSalons)(listUrl, 0.5, areaSelection);
                 return; // バルク処理は完了したので関数を終了
-            case '5':
+            case '3':
                 // 全件バルク処理（100%のサロンをCSV出力）
                 await (0, bulkSalonController_1.processBulkSalons)(listUrl, 1.0, areaSelection);
                 return; // 100%処理完了後に終了
             default:
-                console.log('デフォルトで最後のサロンを選択します。');
-                salonUrl = await (0, scraper_1.getLastSalonUrl)(lastPageUrl);
+                console.log('無効な選択です。サロン名検索を実行します。');
+                const defaultTargetName = await (0, userInput_1.askQuestion)('検索するサロン名を入力してください: ');
+                salonUrl = await (0, scraper_1.findSalonByName)(lastPageUrl, defaultTargetName + ' インスタグラム instagram');
         }
         if (salonUrl) {
             console.log(`Navigating to salon page: ${salonUrl}`);
@@ -76,30 +69,5 @@ async function processListing(listUrl, areaSelection) {
     }
     catch (error) {
         (0, display_1.displayError)('リスト処理でエラーが発生しました', error);
-    }
-}
-/**
- * サロン一覧から選択する
- * @param listPageUrl リストページのURL
- * @returns 選択されたサロンのURL
- */
-async function selectFromSalonList(listPageUrl) {
-    try {
-        const salons = await (0, scraper_1.getSalonList)(listPageUrl);
-        if (salons.length === 0) {
-            (0, display_1.displayError)('サロンが見つかりませんでした。');
-            return undefined;
-        }
-        const selectedIndex = await (0, userInput_1.promptSalonSelection)(salons);
-        if (selectedIndex !== undefined) {
-            const selected = salons[selectedIndex];
-            console.log(`✓ 選択されました: "${selected.name}"`);
-            return selected.url;
-        }
-        return undefined;
-    }
-    catch (error) {
-        (0, display_1.displayError)('サロン一覧取得に失敗しました', error);
-        return undefined;
     }
 }
