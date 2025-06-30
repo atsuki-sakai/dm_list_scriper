@@ -14,7 +14,11 @@ export const AREA_URL_MAP: Readonly<Record<string, string>> = {
 };
 
 /** 遅延時間の定数 */
-export const DELAY_MS = 1000;
+export const DELAY_MS = 500;
+
+/** 検索エンジンの有効/無効 */
+export const BRING_SEARCH = false;
+export const YAHOO_SEARCH = false;
 
 /** CSSセレクタの定数 */
 export const SELECTORS = {
