@@ -107,8 +107,8 @@ export async function promptSalonSelectionMethod(): Promise<string> {
     const question = `
 サロン選択方法を選んでください:
 1: 特定のサロン名で検索
-2: 🚀 下位50%のサロンをCSV出力
-3: 🏆 全件100%のサロンをCSV出力
+2: 🚀 下位 - 50%のサロンをCSV出力
+3: 🏆 全件 - 100%のサロンをCSV出力
 選択: `;
 
     return askQuestion(question);
