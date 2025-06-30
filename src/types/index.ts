@@ -81,4 +81,12 @@ export interface ExtendedSalonDetails extends SalonDetails {
 export interface AreaSelectionOptions {
     areas: Area[];
     prompt: string;
+}
+
+/** エリア選択結果を保持する型定義 */
+export interface AreaSelectionResult {
+    url: string;
+    mainAreaName?: string;    // メインエリア名（例：中国）
+    subAreaName?: string;     // サブエリア名（例：島根）
+    detailAreaName?: string;  // 詳細エリア名（例：益田・浜田）
 } 
