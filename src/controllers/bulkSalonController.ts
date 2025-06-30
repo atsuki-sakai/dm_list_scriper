@@ -2,7 +2,7 @@ import { getAllSalons, extractSalonDetails } from '../services/scraper';
 import { searchGoogle, generateSearchQuery, resetEngineStatus } from '../services/googleSearch';
 import { exportToCSV, displayCSVStats } from '../services/csvExport';
 import { displayError, displayProgress, displaySuccess } from '../services/display';
-import { ExtendedSalonDetails, SalonDetails, GoogleSearchResult } from '../types/index';
+import { ExtendedSalonDetails, SalonDetails, GoogleSearchResult, AreaSelectionResult } from '../types/index';
 import { sleep, calculateRelevanceScore } from '../utils/index';
 
 /**
@@ -77,8 +77,10 @@ function applyRelevanceFiltering(searchResult: GoogleSearchResult, salonName: st
 /**
  * エリアの総サロン数の50%を対象に一括処理を実行
  * @param listUrl リストページのURL
+ * @param ratio 処理対象の比率（0.5 = 50%）
+ * @param areaSelection エリア選択情報（CSV出力用）
  */
-export async function processBulkSalons(listUrl: string, ratio: number = 0.5): Promise<void> {
+export async function processBulkSalons(listUrl: string, ratio: number = 0.5, areaSelection?: AreaSelectionResult): Promise<void> {
     try {
         // 検索エンジンの無効化状態をリセット（新しい処理セッション開始）
         resetEngineStatus();
@@ -173,7 +175,7 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5): P
             displayCSVStats(extendedSalonDetails);
             
             // CSVファイルを出力
-            const csvPath = exportToCSV(extendedSalonDetails);
+            const csvPath = exportToCSV(extendedSalonDetails, areaSelection, ratio);
             displaySuccess(`処理完了！CSVファイル: ${csvPath}`);
         } else {
             displayError('処理できたサロン情報がありませんでした。');
