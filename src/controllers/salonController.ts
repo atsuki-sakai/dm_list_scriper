@@ -1,14 +1,11 @@
 import { 
     resolveLastPageUrl, 
-    getLastSalonUrl, 
     findSalonByName, 
-    getSalonList, 
     extractSalonDetails 
 } from '../services/scraper';
 import { 
     askQuestion, 
-    promptSalonSelectionMethod, 
-    promptSalonSelection 
+    promptSalonSelectionMethod 
 } from '../services/userInput';
 import { displaySalonDetails, displayError, displayProgress } from '../services/display';
 import { processBulkSalons } from './bulkSalonController';
@@ -56,34 +53,25 @@ export async function processListing(listUrl: string, areaSelection?: AreaSelect
 
         switch (choice.trim()) {
             case '1':
-                // 従来通り最後のサロンを取得
-                salonUrl = await getLastSalonUrl(lastPageUrl);
-                break;
-                
-            case '2':
                 // サロン名で検索
                 const targetName = await askQuestion('検索するサロン名を入力してください: ');
                 salonUrl = await findSalonByName(lastPageUrl, targetName + ' インスタグラム instagram');
                 break;
                 
-            case '3':
-                // 全サロン一覧を表示してユーザーに選択させる
-                salonUrl = await selectFromSalonList(lastPageUrl);
-                break;
-                
-            case '4':
+            case '2':
                 // バルク処理（50%のサロンをCSV出力）
                 await processBulkSalons(listUrl, 0.5, areaSelection);
                 return; // バルク処理は完了したので関数を終了
                 
-            case '5':
+            case '3':
                 // 全件バルク処理（100%のサロンをCSV出力）
                 await processBulkSalons(listUrl, 1.0, areaSelection);
                 return; // 100%処理完了後に終了
                 
             default:
-                console.log('デフォルトで最後のサロンを選択します。');
-                salonUrl = await getLastSalonUrl(lastPageUrl);
+                console.log('無効な選択です。サロン名検索を実行します。');
+                const defaultTargetName = await askQuestion('検索するサロン名を入力してください: ');
+                salonUrl = await findSalonByName(lastPageUrl, defaultTargetName + ' インスタグラム instagram');
         }
 
         if (salonUrl) {
@@ -97,31 +85,4 @@ export async function processListing(listUrl: string, areaSelection?: AreaSelect
     }
 }
 
-/**
- * サロン一覧から選択する
- * @param listPageUrl リストページのURL
- * @returns 選択されたサロンのURL
- */
-async function selectFromSalonList(listPageUrl: string): Promise<string | undefined> {
-    try {
-        const salons = await getSalonList(listPageUrl);
-
-        if (salons.length === 0) {
-            displayError('サロンが見つかりませんでした。');
-            return undefined;
-        }
-
-        const selectedIndex = await promptSalonSelection(salons);
-        
-        if (selectedIndex !== undefined) {
-            const selected = salons[selectedIndex];
-            console.log(`✓ 選択されました: "${selected.name}"`);
-            return selected.url;
-        }
-        
-        return undefined;
-    } catch (error) {
-        displayError('サロン一覧取得に失敗しました', error);
-        return undefined;
-    }
-} 
+ 
