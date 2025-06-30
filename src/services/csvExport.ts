@@ -1,20 +1,28 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ExtendedSalonDetails } from '../types/index';
+import { ExtendedSalonDetails, AreaSelectionResult } from '../types/index';
 
 // ======================= CSV出力サービス ========================
 
 /**
  * サロン詳細情報をCSV形式でエクスポート
  * @param salons サロン詳細情報の配列
- * @param filename ファイル名（オプション）
+ * @param areaSelection エリア選択情報（ファイル名生成用）
+ * @param ratio 処理割合（0.5 = 50%, 1.0 = 100%）
+ * @param filename ファイル名（オプション、指定した場合はエリア情報は無視）
  * @returns 出力されたファイルパス
  */
-export function exportToCSV(salons: ExtendedSalonDetails[], filename?: string): string {
+export function exportToCSV(salons: ExtendedSalonDetails[], areaSelection?: AreaSelectionResult, ratio?: number, filename?: string): string {
     // ファイル名を生成（指定されていない場合）
     if (!filename) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        filename = `salon_details_${timestamp}.csv`;
+        if (areaSelection) {
+            // エリア名を使ったファイル名を生成
+            filename = generateAreaBasedFilename(areaSelection, ratio);
+        } else {
+            // フォールバック: タイムスタンプベースのファイル名
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            filename = `salon_details_${timestamp}.csv`;
+        }
     }
 
     // CSVヘッダーを定義
@@ -109,6 +117,54 @@ export function exportToCSV(salons: ExtendedSalonDetails[], filename?: string): 
         console.error('❌ CSVファイルの保存に失敗しました:', error);
         throw error;
     }
+}
+
+/**
+ * エリア情報を基にファイル名を生成
+ * @param areaSelection エリア選択情報
+ * @param ratio 処理割合（0.5 = 50%, 1.0 = 100%）
+ * @returns 生成されたファイル名
+ */
+function generateAreaBasedFilename(areaSelection: AreaSelectionResult, ratio?: number): string {
+    // ファイル名に不適切な文字を置換する関数
+    const sanitizeForFilename = (str: string): string => {
+        return str
+            .replace(/[\/\\\?%\*:|"<>]/g, '') // ファイル名に使えない文字を削除
+            .replace(/\s+/g, '') // スペースを削除
+            .replace(/[\(\)]/g, ''); // 括弧も削除
+    };
+
+    const parts: string[] = [];
+    
+    // メインエリア名を追加
+    if (areaSelection.mainAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.mainAreaName));
+    }
+    
+    // サブエリア名を追加
+    if (areaSelection.subAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.subAreaName));
+    }
+    
+    // 詳細エリア名を追加
+    if (areaSelection.detailAreaName) {
+        parts.push(sanitizeForFilename(areaSelection.detailAreaName));
+    }
+    
+    // 処理割合を追加（50%または100%）
+    if (ratio !== undefined) {
+        const percentage = Math.round(ratio * 100);
+        parts.push(`${percentage}%`);
+    }
+    
+    // パーツが空の場合はフォールバック
+    if (parts.length === 0) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        return `salon_details_${timestamp}.csv`;
+    }
+    
+    // "エリア_エリアの詳細_さらに詳細.csv" の形式で結合
+    return `${parts.join('_')}.csv`;
 }
 
 /**
