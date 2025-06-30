@@ -312,13 +312,21 @@ export function generateSearchQuery(salonName: string, address: string): string 
 /**
  * Instagram専用検索を実行
  * @param salonName サロン名
+ * @param address 住所（任意）
  * @returns Instagram URLとメタデータ
  */
-async function searchForInstagram(salonName: string): Promise<GoogleSearchResult> {
+async function searchForInstagram(salonName: string, address?: string): Promise<GoogleSearchResult> {
     console.log('  📱 Instagram専用検索を開始...');
     
-    // Instagram最適化クエリ: ヘアサロンキーワード + サロン名 + instagram
-    const instagramQuery = `ヘアサロン ${salonName} instagram`;
+    // Instagram最適化クエリ: ヘアサロンキーワード + サロン名 + 住所 + instagram
+    let instagramQuery = `ヘアサロン ${salonName}`;
+    if (address) {
+        // 住所を整理（余分な空白や改行を除去）
+        const cleanAddress = address.trim().replace(/\s+/g, '').replace(/\n/g, '');
+        instagramQuery += ` ${cleanAddress}`;
+    }
+    instagramQuery += ` instagram`;
+    
     console.log(`    🔍 Instagram検索クエリ: "${instagramQuery}"`);
     
     const result = await searchGoogleApi(instagramQuery, salonName);
@@ -423,8 +431,8 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
         return await searchGoogleApi(query);
     }
     
-    // 1. Instagram専用検索を実行
-    const instagramResult = await searchForInstagram(salonName);
+    // 1. Instagram専用検索を実行（住所を含む）
+    const instagramResult = await searchForInstagram(salonName, address);
     
     // 2. ビジネス情報専用検索を実行（住所が利用可能な場合のみ）
     let businessResult: GoogleSearchResult = {};
