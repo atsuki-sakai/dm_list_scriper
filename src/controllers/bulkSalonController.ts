@@ -111,10 +111,10 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
             const progress = `[${i + 1}/${targetSalons.length}]`;
             
             console.log(`${progress} 処理中: ${salon.name}`);
+            console.log(`🔍   サロン詳細を取得中...`);
             
             try {
                 // サロン詳細情報を取得
-                displayProgress(`  サロン詳細を取得中...`);
                 const salonDetails = await extractSalonDetails(salon.url);
                 
                 if (!salonDetails) {
