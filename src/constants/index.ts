@@ -31,12 +31,6 @@ export const BRING_SEARCH = process.env.BRING_SEARCH !== 'false';
 export const YAHOO_SEARCH = process.env.YAHOO_SEARCH !== 'false';
 
 
-/**
- * Instagram直接検索を有効にするかどうかの設定
- * 環境変数INSTAGRAM_DIRECT_SEARCH=trueで有効化
- * Instagram内での直接検索、レート制限に注意
- */
-export const INSTAGRAM_DIRECT_SEARCH = process.env.INSTAGRAM_DIRECT_SEARCH === 'true';
 
 /** CSSセレクタの定数 */
 export const SELECTORS = {
