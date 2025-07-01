@@ -1,9 +1,9 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { GoogleSearchResult, GoogleBusinessInfo } from '../types/index';
-import { sleep, calculateRelevanceScore } from '../utils/index';
+import { sleep, calculateRelevanceScore, generateLocationBasedSearchQuery } from '../utils/index';
 import { BRING_SEARCH, YAHOO_SEARCH } from '../constants/index';
-import { extractInstagramFromSearchItem, extractInstagramUrls } from './instagramExtractor';
+import { extractInstagramFromSearchItem, calculateInstagramRelevance } from './instagramExtractor';
 
 // ======================= 検索エンジン状態管理 ========================
 
@@ -601,6 +601,8 @@ async function searchBingPage(query: string, page: number): Promise<GoogleSearch
         const instagramLinks = $('a[href*="instagram.com"]');
         console.log(`    🔍 Bing ${page}ページ目 Instagram候補リンク数: ${instagramLinks.length}`);
         
+        const instagramCandidates: { url: string; relevance: number }[] = [];
+        
         instagramLinks.each((idx, el) => {
             if (idx < 3) { // 最初の3件を表示
                 const hrefDbg = $(el).attr('href');
@@ -608,14 +610,22 @@ async function searchBingPage(query: string, page: number): Promise<GoogleSearch
             }
             
             const href = $(el).attr('href');
-            if (href && !instagramUrl) {
-                // 直接リンクまたはBingのリダイレクトURLから実際のURLを抽出
-                if (href.includes('instagram.com')) {
-                    instagramUrl = href;
-                    return false; // 最初に見つかったものを使用
+            if (href && href.includes('instagram.com')) {
+                // 関連度計算を適用
+                const relevance = calculateInstagramRelevance(href, query.replace(/[^a-zA-Z0-9\s]/g, '').split(' ')[0] || '');
+                if (relevance >= 0.1) {
+                    instagramCandidates.push({ url: href, relevance });
+                    console.log(`      📱 Bing候補: ${href} (関連度: ${(relevance * 100).toFixed(1)}%)`);
                 }
             }
         });
+        
+        // 最も関連度の高いものを選択
+        if (instagramCandidates.length > 0) {
+            instagramCandidates.sort((a, b) => b.relevance - a.relevance);
+            instagramUrl = instagramCandidates[0].url;
+            console.log(`    ✅ Bing最高関連度: ${instagramUrl} (${(instagramCandidates[0].relevance * 100).toFixed(1)}%)`);
+        }
         
         // テキスト内のInstagram URLも検索
         if (!instagramUrl) {
@@ -843,6 +853,8 @@ async function searchYahooPage(query: string, page: number): Promise<GoogleSearc
         const instagramLinks = $('a[href*="instagram.com"]');
         console.log(`    🎯 Yahoo ${page}ページ目 Instagram候補リンク数: ${instagramLinks.length}`);
         
+        const instagramCandidates: { url: string; relevance: number }[] = [];
+        
         instagramLinks.each((idx, el) => {
             if (idx < 3) { // 最初の3件を表示
                 const hrefDbg = $(el).attr('href');
@@ -850,7 +862,9 @@ async function searchYahooPage(query: string, page: number): Promise<GoogleSearc
             }
             
             const href = $(el).attr('href');
-            if (href && !instagramUrl) {
+            if (href) {
+                let candidateUrl = '';
+                
                 // Yahooのリダイレクトや直接リンクから実際のURLを抽出
                 if (href.includes('/RU=')) {
                     // Yahooリダイレクト形式: /RU=https%3A//instagram.com/...
@@ -858,16 +872,30 @@ async function searchYahooPage(query: string, page: number): Promise<GoogleSearc
                     if (match) {
                         const decodedUrl = decodeURIComponent(match[1]);
                         if (decodedUrl.includes('instagram.com')) {
-                            instagramUrl = decodedUrl;
-                            return false;
+                            candidateUrl = decodedUrl;
                         }
                     }
                 } else if (href.includes('instagram.com')) {
-                    instagramUrl = href;
-                    return false; // 最初に見つかったものを使用
+                    candidateUrl = href;
+                }
+                
+                if (candidateUrl) {
+                    // 関連度計算を適用
+                    const relevance = calculateInstagramRelevance(candidateUrl, query.replace(/[^a-zA-Z0-9\s]/g, '').split(' ')[0] || '');
+                    if (relevance >= 0.1) {
+                        instagramCandidates.push({ url: candidateUrl, relevance });
+                        console.log(`      📱 Yahoo候補: ${candidateUrl} (関連度: ${(relevance * 100).toFixed(1)}%)`);
+                    }
                 }
             }
         });
+        
+        // 最も関連度の高いものを選択
+        if (instagramCandidates.length > 0) {
+            instagramCandidates.sort((a, b) => b.relevance - a.relevance);
+            instagramUrl = instagramCandidates[0].url;
+            console.log(`    ✅ Yahoo最高関連度: ${instagramUrl} (${(instagramCandidates[0].relevance * 100).toFixed(1)}%)`);
+        }
         
         // テキスト内のInstagram URLも検索
         if (!instagramUrl) {
@@ -961,8 +989,6 @@ async function searchYahooPage(query: string, page: number): Promise<GoogleSearc
         return {};
     }
 }
-
-
 
 /**
  * 検索を実行してInstagram URLとメールアドレスを抽出（効率的な検索エンジン戦略）
@@ -1061,20 +1087,30 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
 }
 
 /**
- * サロン名と住所を組み合わせて検索クエリを生成
+ * サロン名と住所を組み合わせて検索クエリを生成（都道府県・市を含む最適化版）
+ * Instagram検索により効果的で地域特化されたクエリを生成
  * @param salonName サロン名
  * @param address 住所
  * @returns 検索クエリ
  */
 export function generateSearchQuery(salonName: string, address: string): string {
-    // サロン名から不要な記号や余分な空白を整理
-    const cleanSalonName = salonName.trim().replace(/\s+/g, ' ');
-    
-    // 住所を整理（余分な空白や改行を除去）
-    const cleanAddress = address.trim().replace(/\s+/g, ' ').replace(/\n/g, '');
-    
-    // ヘアサロン特化の包括的な検索クエリを生成
-    // 形式: "ヘアサロン サロン名 住所"
-    // Google My Businessの情報も含めて広く検索できるようにする
-    return `ヘアサロン ${cleanSalonName} ${cleanAddress}`;
+    // 地域情報を含む検索クエリを生成
+    return generateLocationBasedSearchQuery(salonName, address);
+}
+
+/**
+ * Instagram専用の最適化された検索クエリを生成（都道府県・市を含む）
+ * @param salonName サロン名
+ * @param address 住所（オプション）
+ * @returns Instagram検索用の地域特化されたクエリ
+ */
+export function generateInstagramSearchQuery(salonName: string, address?: string): string {
+    if (address) {
+        // 住所が提供された場合は地域情報を含める
+        return generateLocationBasedSearchQuery(salonName, address);
+    } else {
+        // 従来の方式（後方互換性のため）
+        const cleanSalonName = salonName.trim().replace(/\s+/g, ' ');
+        return `ヘアサロン ${cleanSalonName} Instagram`;
+    }
 }
