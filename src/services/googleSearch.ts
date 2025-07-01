@@ -239,6 +239,36 @@ function extractGoogleBusinessInfo(item: any): GoogleBusinessInfo {
         businessInfo.website = item.link;
     }
     
+    // メールアドレスの抽出（Google Business情報として信頼度が高い）
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const emailMatches = combinedText.match(emailPattern);
+    
+    if (emailMatches && emailMatches.length > 0) {
+        // Google Business情報として、より信頼度の高いメールアドレスをフィルタリング
+        const businessEmails = emailMatches.filter(email => {
+            const lowerEmail = email.toLowerCase();
+            return (
+                // フリーメールは除外（ビジネス用ではない可能性が高い）
+                !lowerEmail.includes('@gmail.com') && 
+                !lowerEmail.includes('@yahoo.co.jp') && 
+                !lowerEmail.includes('@yahoo.com') &&
+                !lowerEmail.includes('@hotmail.com') &&
+                !lowerEmail.includes('@outlook.com') &&
+                // システム系メールも除外
+                !lowerEmail.includes('noreply') &&
+                !lowerEmail.includes('no-reply') &&
+                !lowerEmail.includes('@google.com') &&
+                // 基本的な形式チェック
+                email.length > 5 && email.includes('@') && email.includes('.')
+            );
+        });
+        
+        if (businessEmails.length > 0) {
+            businessInfo.email = businessEmails[0]; // 最初の有効なビジネスメールを採用
+            console.log(`      📧 Google Businessメール発見: ${businessInfo.email}`);
+        }
+    }
+    
     return businessInfo;
 }
 
@@ -432,10 +462,7 @@ async function searchGoogleApi(query: string): Promise<GoogleSearchResult> {
                     }
                 }
 
-                // 電話番号はGoogle Business情報からのみ取得する
-                // （Google Business情報から既に取得されている場合は、後でresultに追加される）
-
-                // ホームページURLを検索（候補リストに追加）
+                // GoogleBusinessから取得したホームページURLのみを使用（候補は収集しない）
                 if (link && !link.includes('instagram.com') && !link.includes('hotpepper.jp') && 
                     !link.includes('google.com') && !link.includes('facebook.com') && 
                     !link.includes('twitter.com') && !link.includes('youtube.com') &&
@@ -443,38 +470,41 @@ async function searchGoogleApi(query: string): Promise<GoogleSearchResult> {
                     !link.includes('wikipedia.org') && !link.includes('amazon.') &&
                     (link.startsWith('http://') || link.startsWith('https://'))) {
                     
-                    // ホームページ候補として保存
-                    if (!result.homepageCandidates) {
-                        result.homepageCandidates = [];
-                    }
-                    
-                    // 重複を避ける
-                    if (!result.homepageCandidates.includes(link)) {
-                        result.homepageCandidates.push(link);
-                        
-                        // 最初の候補を暫定的にホームページURLとして設定
-                        if (!result.homepageUrl) {
-                            result.homepageUrl = link;
-                        }
+                    // 最初に見つかったサロン関連サイトを暫定的にホームページURLとして設定
+                    if (!result.homepageUrl) {
+                        result.homepageUrl = link;
                     }
                 }
             }
             
-            // Instagram候補をresultに追加
+            // Instagram候補をresultに追加（最大2つまで）
             if (instagramCandidates.length > 0) {
-                result.instagramCandidates = [...new Set(instagramCandidates)]; // 重複を除去
+                const uniqueCandidates = [...new Set(instagramCandidates)]; // 重複を除去
+                result.instagramCandidates = uniqueCandidates.slice(0, 2); // 最大2つまで
+                console.log(`    📱 Instagram候補: ${result.instagramCandidates.length}件（最大2件に制限）`);
             }
             
             // Google Business情報をresultに追加
             if (googleBusinessInfo) {
                 result.googleBusinessInfo = googleBusinessInfo;
                 
-                // Google Business情報から不足している情報を補完
-                if (!result.phoneNumber && googleBusinessInfo.phoneNumber) {
-                    result.phoneNumber = googleBusinessInfo.phoneNumber;
-                }
+                // Google Business情報から不足している情報を補完（高信頼度）
                 if (!result.homepageUrl && googleBusinessInfo.website) {
                     result.homepageUrl = googleBusinessInfo.website;
+                }
+                
+                // Google Businessメールアドレスは最優先（信頼度が高いため）
+                if (googleBusinessInfo.email) {
+                    result.email = googleBusinessInfo.email;
+                    console.log(`    📧 Google Businessメールアドレスを優先採用: ${result.email}`);
+                    
+                    // Google Businessメールを候補の最初に追加
+                    if (!result.emailCandidates) {
+                        result.emailCandidates = [];
+                    }
+                    if (!result.emailCandidates.includes(googleBusinessInfo.email)) {
+                        result.emailCandidates.unshift(googleBusinessInfo.email); // 最初に追加
+                    }
                 }
             }
             
@@ -1056,15 +1086,12 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
     
     
     // 最終統合結果を表示
-    console.log(`  🔄 最終統合検索結果: Instagram=${mergedResult.instagramUrl ? '✓' : '✗'}, Email=${mergedResult.email ? '✓' : '✗'}, Phone=${mergedResult.phoneNumber ? '✓' : '✗'}, Homepage=${mergedResult.homepageUrl ? '✓' : '✗'}`);
+    console.log(`  🔄 最終統合検索結果: Instagram=${mergedResult.instagramUrl ? '✓' : '✗'}, Email=${mergedResult.email ? '✓' : '✗'}, Homepage=${mergedResult.homepageUrl ? '✓' : '✗'}`);
     if (mergedResult.instagramUrl) {
         console.log(`    📱 Instagram: ${mergedResult.instagramUrl}`);
     }
     if (mergedResult.email) {
         console.log(`    📧 Email: ${mergedResult.email}`);
-    }
-    if (mergedResult.phoneNumber) {
-        console.log(`    📞 Phone: ${mergedResult.phoneNumber}`);
     }
     if (mergedResult.homepageUrl) {
         console.log(`    🏠 Homepage: ${mergedResult.homepageUrl}`);
@@ -1074,13 +1101,11 @@ export async function searchGoogle(query: string): Promise<GoogleSearchResult> {
     const results = [];
     if (mergedResult.instagramUrl) results.push('Instagram=✓');
     if (mergedResult.email) results.push('Email=✓');
-    if (mergedResult.phoneNumber) results.push('Phone=✓');
     if (mergedResult.homepageUrl) results.push('Homepage=✓');
     
     console.log(`  🔄 最終統合検索結果: ${results.length > 0 ? results.join(', ') : 'なし'}`);
     if (mergedResult.instagramUrl) console.log(`    📱 Instagram: ${mergedResult.instagramUrl}`);
     if (mergedResult.email) console.log(`    📧 Email: ${mergedResult.email}`);
-    if (mergedResult.phoneNumber) console.log(`    📞 Phone: ${mergedResult.phoneNumber}`);
     if (mergedResult.homepageUrl) console.log(`    🏠 Homepage: ${mergedResult.homepageUrl}`);
     
     return mergedResult;
