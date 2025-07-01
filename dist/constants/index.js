@@ -16,9 +16,17 @@ exports.AREA_URL_MAP = {
 };
 /** 遅延時間の定数 */
 exports.DELAY_MS = 100;
-/** 検索エンジンの有効/無効 */
-exports.BRING_SEARCH = false;
-exports.YAHOO_SEARCH = false;
+// ======================= 検索エンジン設定 ========================
+/**
+ * Bing検索を有効にするかどうかの設定
+ * 環境変数BRING_SEARCH=trueで有効化（デフォルト: true）
+ */
+exports.BRING_SEARCH = process.env.BRING_SEARCH !== 'false';
+/**
+ * Yahoo検索を有効にするかどうかの設定
+ * 環境変数YAHOO_SEARCH=trueで有効化（デフォルト: true）
+ */
+exports.YAHOO_SEARCH = process.env.YAHOO_SEARCH !== 'false';
 /** CSSセレクタの定数 */
 exports.SELECTORS = {
     SUBAREAS: 'ul.routeMa a',
