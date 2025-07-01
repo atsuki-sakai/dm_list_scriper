@@ -22,6 +22,7 @@ export interface DetailArea {
 export interface SalonDetails {
     name: string;
     address: string;
+    phone?: string; // 電話番号（任意）
     access: string;
     businessHours: string;
     closedDays: string;
@@ -45,35 +46,30 @@ export interface GoogleBusinessInfo {
     website?: string;
     phoneNumber?: string;
     address?: string;
+    email?: string; // Google Businessからのメールアドレス（信頼度が高い）
 }
 
 /** Google検索結果から取得する追加情報の型定義 */
 export interface GoogleSearchResult {
     instagramUrl?: string;
     email?: string;
-    phoneNumber?: string;
     homepageUrl?: string;
     googleBusinessInfo?: GoogleBusinessInfo;
-    // 複数候補用の配列
+    // 複数候補用の配列（Instagram候補は最大2つまで）
     instagramCandidates?: string[];
     emailCandidates?: string[];
-    phoneNumberCandidates?: string[];
-    homepageCandidates?: string[];
 }
 
 /** 拡張されたサロン詳細情報の型定義 */
 export interface ExtendedSalonDetails extends SalonDetails {
     instagramUrl?: string;
     email?: string;
-    phoneNumber?: string;
     homepageUrl?: string;
     googleBusinessInfo?: GoogleBusinessInfo;
     searchQuery: string;
-    // 複数候補用の配列
+    // 複数候補用の配列（Instagram候補は最大2つまで）
     instagramCandidates?: string[];
     emailCandidates?: string[];
-    phoneNumberCandidates?: string[];
-    homepageCandidates?: string[];
 }
 
 /** エリア選択のオプション */
