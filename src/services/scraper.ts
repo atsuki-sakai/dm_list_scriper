@@ -122,6 +122,51 @@ export async function extractSalonDetails(salonUrl: string): Promise<SalonDetail
             name: salonName
         };
 
+        // 電話番号の取得処理
+        let phoneUrl: string | undefined;
+        
+        // まず、電話番号のリンクを探す
+        $(SELECTORS.SALON_DATA_TABLE).each((_, row) => {
+            const $row = $(row);
+            const header = $row.find('th').first().text().trim();
+            
+            if (header === '電話番号') {
+                const phoneLink = $row.find('td a').first();
+                const phoneHref = phoneLink.attr('href');
+                
+                if (phoneHref && phoneLink.text().includes('番号を表示')) {
+                    // 電話番号表示ページのURLを構築
+                    phoneUrl = resolveUrl(phoneHref, salonUrl);
+                }
+                
+                return false; // break the each loop
+            }
+        });
+
+        // 電話番号ページが見つかった場合、別途取得
+        if (phoneUrl) {
+            try {
+                await sleep(DELAY_MS); // レート制限対策
+                const phonePageResponse = await axios.get(phoneUrl);
+                const $phonePage = cheerio.load(phonePageResponse.data);
+                
+                // 電話番号テーブルから番号を抽出
+                $phonePage('table.wFull.bdCell.pCell10.mT15 tr').each((_, phoneRow) => {
+                    const $phoneRow = $phonePage(phoneRow);
+                    const phoneHeader = $phoneRow.find('th').text().trim();
+                    
+                    if (phoneHeader.includes('電話番号')) {
+                        const phoneValue = $phoneRow.find('td').text().trim();
+                        // &nbsp;や余分な空白を削除
+                        details.phone = phoneValue.replace(/&nbsp;/g, '').trim();
+                        return false; // break
+                    }
+                });
+            } catch (phoneErr) {
+                console.error('電話番号ページの取得に失敗しました:', phoneErr);
+            }
+        }
+
         // テーブルから各項目を抽出
         $(SELECTORS.SALON_DATA_TABLE).each((_, row) => {
             const $row = $(row);
@@ -165,6 +210,7 @@ export async function extractSalonDetails(salonUrl: string): Promise<SalonDetail
         return {
             name: details.name || '',
             address: details.address || '',
+            phone: details.phone,
             access: details.access || '',
             businessHours: details.businessHours || '',
             closedDays: details.closedDays || '',
