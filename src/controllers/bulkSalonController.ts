@@ -15,23 +15,29 @@ import { sleep, calculateRelevanceScore } from '../utils/index';
 function applyRelevanceFiltering(searchResult: GoogleSearchResult, salonName: string): GoogleSearchResult {
     const result: GoogleSearchResult = {};
     
-    // Instagram URL候補をフィルタリング
+    // Instagram URL候補をフィルタリング（基本的にすべて保持、関連度は後で計算）
     if (searchResult.instagramCandidates && searchResult.instagramCandidates.length > 0) {
-        const relevantInstagramUrls = searchResult.instagramCandidates || []; // 関連度に関係なく全てのInstagram候補を含める
-        result.instagramCandidates = relevantInstagramUrls;
-        if (relevantInstagramUrls.length > 0) {
-            result.instagramUrl = relevantInstagramUrls[0];
-        }
+        // 全てのInstagram候補を保持（関連度フィルタリングは行わない）
+        result.instagramCandidates = searchResult.instagramCandidates;
+        // 最初の候補をメインURLとして設定
+        result.instagramUrl = searchResult.instagramCandidates[0];
+        console.log(`  📱 Instagram候補処理: ${searchResult.instagramCandidates.length}件中、最初の候補をメインURLに設定 -> ${result.instagramUrl}`);
     } else if (searchResult.instagramUrl) {
+        // 直接URLが設定されている場合はそのまま使用
         result.instagramUrl = searchResult.instagramUrl;
+        result.instagramCandidates = [searchResult.instagramUrl];
+        console.log(`  📱 Instagram直接URL処理: ${result.instagramUrl}`);
     }
     
-    // メールアドレス候補をフィルタリング
-    if (searchResult.email) {
+    // メールアドレス候補をフィルタリング（すべて保持）
+    if (searchResult.emailCandidates && searchResult.emailCandidates.length > 0) {
+        result.emailCandidates = searchResult.emailCandidates;
+        result.email = searchResult.emailCandidates[0];
+    } else if (searchResult.email) {
         result.email = searchResult.email;
     }
     
-    // 電話番号候補をフィルタリング（関連度チェックを緩和）
+    // 電話番号候補をフィルタリング（すべて保持）
     if (searchResult.phoneNumberCandidates && searchResult.phoneNumberCandidates.length > 0) {
         result.phoneNumberCandidates = searchResult.phoneNumberCandidates;
         result.phoneNumber = searchResult.phoneNumberCandidates[0];
@@ -39,12 +45,19 @@ function applyRelevanceFiltering(searchResult: GoogleSearchResult, salonName: st
         result.phoneNumber = searchResult.phoneNumber;
     }
     
-    // ホームページURL候補をフィルタリング
+    // ホームページURL候補をフィルタリング（関連度チェックを緩和）
     if (searchResult.homepageCandidates && searchResult.homepageCandidates.length > 0) {
-        const relevantHomepageUrls = searchResult.homepageCandidates.filter(url => {
+        // 関連度フィルタリングを緩和（10%以上で採用、または候補が少ない場合はすべて採用）
+        let relevantHomepageUrls = searchResult.homepageCandidates.filter(url => {
             const score = calculateRelevanceScore(salonName, url);
-            return score >= 0.2; // 20%以上の関連度で採用
+            return score >= 0.1; // 10%以上の関連度で採用
         });
+        
+        // 候補が全て除外された場合は、最初の候補を保持
+        if (relevantHomepageUrls.length === 0 && searchResult.homepageCandidates.length > 0) {
+            relevantHomepageUrls = [searchResult.homepageCandidates[0]];
+        }
+        
         result.homepageCandidates = relevantHomepageUrls;
         if (relevantHomepageUrls.length > 0) {
             result.homepageUrl = relevantHomepageUrls[0];
@@ -155,8 +168,19 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
                         homepageCandidates: googleResult.homepageCandidates
                     };
 
+                    // デバッグ情報: Instagram URL設定状況を詳細に表示
+                    console.log(`  🔧 Instagram URL設定状況の確認:`);
+                    console.log(`    検索結果のInstagram URL: ${googleResult.instagramUrl || 'なし'}`);
+                    console.log(`    拡張詳細情報のInstagram URL: ${extendedDetails.instagramUrl || 'なし'}`);
+                    console.log(`    Instagram候補数: ${googleResult.instagramCandidates?.length || 0}件`);
+                    if (googleResult.instagramCandidates && googleResult.instagramCandidates.length > 0) {
+                        googleResult.instagramCandidates.forEach((candidate, idx) => {
+                            console.log(`      候補${idx + 1}: ${candidate}`);
+                        });
+                    }
+
                     extendedSalonDetails.push(extendedDetails);
-                    console.log(`  ✅ 完了: ${salon.name} (関連度: ${(relevanceScore * 100).toFixed(1)}%)\n`);
+                    console.log(`  ✅ 完了: ${salon.name} (関連度: ${(relevanceScore * 100).toFixed(1)}%) - CSV追加済み\n`);
                 } else {
                     console.log(`  ⏭️  スキップ: ${salon.name} (関連度不足)\n`);
                 }

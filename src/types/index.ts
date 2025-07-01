@@ -29,6 +29,7 @@ export interface SalonDetails {
     cutPrice: string;
     staffCount: string;
     features: string;
+    homepageUrl?: string; // 公式サイトURL（任意）
     remarks: string;
     other: string;
 }
@@ -87,4 +88,4 @@ export interface AreaSelectionResult {
     mainAreaName?: string;    // メインエリア名（例：中国）
     subAreaName?: string;     // サブエリア名（例：島根）
     detailAreaName?: string;  // 詳細エリア名（例：益田・浜田）
-} 
+}

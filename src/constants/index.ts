@@ -16,9 +16,27 @@ export const AREA_URL_MAP: Readonly<Record<string, string>> = {
 /** 遅延時間の定数 */
 export const DELAY_MS = 100;
 
-/** 検索エンジンの有効/無効 */
-export const BRING_SEARCH = false;
-export const YAHOO_SEARCH = false;
+// ======================= 検索エンジン設定 ========================
+
+/**
+ * Bing検索を有効にするかどうかの設定
+ * 環境変数BRING_SEARCH=trueで有効化（デフォルト: true）
+ */
+export const BRING_SEARCH = process.env.BRING_SEARCH !== 'false';
+
+/**
+ * Yahoo検索を有効にするかどうかの設定  
+ * 環境変数YAHOO_SEARCH=trueで有効化（デフォルト: true）
+ */
+export const YAHOO_SEARCH = process.env.YAHOO_SEARCH !== 'false';
+
+
+/**
+ * Instagram直接検索を有効にするかどうかの設定
+ * 環境変数INSTAGRAM_DIRECT_SEARCH=trueで有効化
+ * Instagram内での直接検索、レート制限に注意
+ */
+export const INSTAGRAM_DIRECT_SEARCH = process.env.INSTAGRAM_DIRECT_SEARCH === 'true';
 
 /** CSSセレクタの定数 */
 export const SELECTORS = {
