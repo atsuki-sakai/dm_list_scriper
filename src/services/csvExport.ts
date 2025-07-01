@@ -30,6 +30,7 @@ export function exportToCSV(salons: ExtendedSalonDetails[], areaSelection?: Area
         'インデックス',
         'サロン名',
         '住所',
+        '電話番号',
         'アクセス',
         '営業時間',
         '定休日',
@@ -42,10 +43,7 @@ export function exportToCSV(salons: ExtendedSalonDetails[], areaSelection?: Area
         'Instagram URL',
         'Instagram URL候補',
         'メールアドレス',
-        '電話番号',
-        '電話番号候補',
         'ホームページURL',
-        'ホームページURL候補',
         'Google Business評価',
         'Google Businessレビュー数',
         'Google Business営業時間',
@@ -64,6 +62,7 @@ export function exportToCSV(salons: ExtendedSalonDetails[], areaSelection?: Area
             escapeCSVField((index + 1).toString()), // インデックス（1から開始）
             escapeCSVField(salon.name),
             escapeCSVField(salon.address),
+            escapeCSVField(salon.phone || ''), // 電話番号
             escapeCSVField(salon.access),
             escapeCSVField(salon.businessHours),
             escapeCSVField(salon.closedDays),
@@ -76,10 +75,7 @@ export function exportToCSV(salons: ExtendedSalonDetails[], areaSelection?: Area
             escapeCSVField(salon.instagramUrl || ''),
             escapeCSVField(salon.instagramCandidates?.join('; ') || ''), // Instagram URL候補
             escapeCSVField(salon.email || ''),
-            escapeCSVField(salon.phoneNumber || ''),
-            escapeCSVField(salon.phoneNumberCandidates?.join('; ') || ''), // 電話番号候補
             escapeCSVField(salon.homepageUrl || ''),
-            escapeCSVField(salon.homepageCandidates?.join('; ') || ''), // ホームページURL候補
             escapeCSVField(salon.googleBusinessInfo?.rating?.toString() || ''), // Google Business評価
             escapeCSVField(salon.googleBusinessInfo?.reviewCount?.toString() || ''), // Google Businessレビュー数
             escapeCSVField(salon.googleBusinessInfo?.businessHours || ''), // Google Business営業時間
@@ -191,7 +187,6 @@ function escapeCSVField(field: string): string {
 export function displayCSVStats(salons: ExtendedSalonDetails[]): void {
     const instagramCount = salons.filter(s => s.instagramUrl).length;
     const emailCount = salons.filter(s => s.email).length;
-    const phoneCount = salons.filter(s => s.phoneNumber).length;
     const homepageCount = salons.filter(s => s.homepageUrl).length;
     
     // デバッグ情報: Instagram URLを持つサロンの詳細表示
@@ -224,22 +219,16 @@ export function displayCSVStats(salons: ExtendedSalonDetails[]): void {
     
     // 候補数も集計
     const instagramCandidatesCount = salons.reduce((acc, s) => acc + (s.instagramCandidates?.length || 0), 0);
-    const phoneCandidatesCount = salons.reduce((acc, s) => acc + (s.phoneNumberCandidates?.length || 0), 0);
-    const homepageCandidatesCount = salons.reduce((acc, s) => acc + (s.homepageCandidates?.length || 0), 0);
     
     console.log('\n📈 CSV出力統計:');
     console.log(`   総サロン数: ${salons.length}件`);
     console.log(`   Instagram URL取得: ${instagramCount}件 (${Math.round(instagramCount / salons.length * 100)}%) | 候補総数: ${instagramCandidatesCount}件`);
     console.log(`   メールアドレス取得: ${emailCount}件 (${Math.round(emailCount / salons.length * 100)}%)`);
-    console.log(`   電話番号取得: ${phoneCount}件 (${Math.round(phoneCount / salons.length * 100)}%) | 候補総数: ${phoneCandidatesCount}件`);
-    console.log(`   ホームページURL取得: ${homepageCount}件 (${Math.round(homepageCount / salons.length * 100)}%) | 候補総数: ${homepageCandidatesCount}件`);
+    console.log(`   ホームページURL取得: ${homepageCount}件 (${Math.round(homepageCount / salons.length * 100)}%)`);
     
     console.log(`\n🏢 Google Business情報取得:`);
     console.log(`   Google Business情報: ${googleBusinessCount}件 (${Math.round(googleBusinessCount / salons.length * 100)}%)`);
     console.log(`   Google評価: ${googleRatingCount}件 (${Math.round(googleRatingCount / salons.length * 100)}%)`);
     console.log(`   Google レビュー数: ${googleReviewCount}件 (${Math.round(googleReviewCount / salons.length * 100)}%)`);
     console.log(`   Google営業時間: ${googleHoursCount}件 (${Math.round(googleHoursCount / salons.length * 100)}%)`);
-    
-    console.log(`\n🎯 関連度フィルタリング効果:`);
-    console.log(`   Instagram: 平均 ${instagramCandidatesCount > 0 ? (instagramCandidatesCount / Math.max(salons.filter(s => s.instagramCandidates?.length).length, 1)).toFixed(1) : 0} 候補/サロン`);
 }
