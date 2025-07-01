@@ -264,6 +264,36 @@ function extractGoogleBusinessInfo(item: any): GoogleBusinessInfo {
         }
     }
     
+    // メールアドレスの抽出（Google Business情報として信頼度が高い）
+    const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const emailMatches = combinedText.match(emailPattern);
+    
+    if (emailMatches && emailMatches.length > 0) {
+        // Google Business情報として、より信頼度の高いメールアドレスをフィルタリング
+        const businessEmails = emailMatches.filter(email => {
+            const lowerEmail = email.toLowerCase();
+            return (
+                // フリーメールは除外（ビジネス用ではない可能性が高い）
+                !lowerEmail.includes('@gmail.com') && 
+                !lowerEmail.includes('@yahoo.co.jp') && 
+                !lowerEmail.includes('@yahoo.com') &&
+                !lowerEmail.includes('@hotmail.com') &&
+                !lowerEmail.includes('@outlook.com') &&
+                // システム系メールも除外
+                !lowerEmail.includes('noreply') &&
+                !lowerEmail.includes('no-reply') &&
+                !lowerEmail.includes('@google.com') &&
+                // 基本的な形式チェック
+                email.length > 5 && email.includes('@') && email.includes('.')
+            );
+        });
+        
+        if (businessEmails.length > 0) {
+            businessInfo.email = businessEmails[0]; // 最初の有効なビジネスメールを採用
+            console.log(`      📧 Google Businessメール発見: ${businessInfo.email}`);
+        }
+    }
+    
     return businessInfo;
 }
 
@@ -294,8 +324,6 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
         // 候補を格納する配列
         const instagramCandidates: Array<{ url: string; relevance: number }> = [];
         const emailCandidates: string[] = [];
-        const phoneNumberCandidates: string[] = [];
-        const homepageCandidates: string[] = [];
         let googleBusinessInfo: GoogleBusinessInfo | undefined;
 
         if (data.items && data.items.length > 0) {
@@ -366,7 +394,7 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                     console.log(`      📋 pagemap: なし`);
                 }
                 
-                // Instagram関連の文字列検索
+                // Instagram関連の文字列検索（強化デバッグ）
                 const allText = `${item.title} ${item.snippet} ${item.link} ${item.displayLink}`;
                 const hasInstagramKeyword = allText.toLowerCase().includes('instagram');
                 console.log(`      📱 Instagram関連キーワード含有: ${hasInstagramKeyword ? '✅ あり' : '❌ なし'}`);
@@ -380,6 +408,24 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                             console.log(`          [${matchIndex}] "${match.trim()}"`);
                         });
                     }
+                    
+                    // URL形式の詳細チェック
+                    console.log(`        🔍 URL形式詳細チェック:`);
+                    const urlPatterns = [
+                        /instagram\.com\/[a-zA-Z0-9_\.]+/gi,
+                        /›\s*instagram\.com\s*›\s*[a-zA-Z0-9_\.]+/gi,
+                        /@[a-zA-Z0-9_\.]+/gi
+                    ];
+                    
+                    urlPatterns.forEach((pattern, patternIndex) => {
+                        const matches = allText.match(pattern);
+                        if (matches) {
+                            console.log(`          パターン${patternIndex + 1} (${pattern.source}): ${matches.length}件`);
+                            matches.forEach((match, matchIndex) => {
+                                console.log(`            [${matchIndex}] "${match}"`);
+                            });
+                        }
+                    });
                 }
                 
                 console.log(`    ---`);
@@ -392,14 +438,60 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                 const snippet = item.snippet || '';
                 const title = item.title || '';
                 
-                // 新しいInstagram抽出機能を使用
+                // Instagram URL抽出（複数のアプローチを試行）
+                // アプローチ1: 新しいInstagram抽出機能を使用
                 const instagramResult = extractInstagramFromSearchItem(item, salonName);
                 if (instagramResult) {
                     // 重複チェック
                     const exists = instagramCandidates.find(candidate => candidate.url === instagramResult.url);
                     if (!exists) {
+                        // 関連度に関係なく候補に追加（関連度0でも追加）
                         instagramCandidates.push(instagramResult);
-                        console.log(`    📱 Instagram候補追加: ${instagramResult.url} (関連度: ${(instagramResult.relevance * 100).toFixed(1)}%)`);
+                        console.log(`    📱 Instagram候補追加 (instagramExtractor): ${instagramResult.url} (関連度: ${(instagramResult.relevance * 100).toFixed(1)}%)`);
+                    }
+                }
+                
+                // アプローチ2: 直接的なパターンマッチング（フォールバック・強化版）
+                const allText = `${title} ${snippet} ${link}`;
+                const directPatterns = [
+                    /https?:\/\/(?:www\.)?instagram\.com\/([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})(?:\/|\?|$)/gi,
+                    /instagram\.com\/([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})(?:\/|\?|$)/gi,
+                    /›\s*instagram\.com\s*›\s*([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})/gi,
+                    // 追加パターン：検索結果でよく見られる形式
+                    /Instagram\s*[\(（]([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})[\)）]/gi,
+                    /@([a-zA-Z0-9_][a-zA-Z0-9_.]{0,29})\b/g
+                ];
+                
+                for (const pattern of directPatterns) {
+                    const matches = [...allText.matchAll(pattern)];
+                    for (const match of matches) {
+                        let candidateUrl: string;
+                        if (match[0].startsWith('http')) {
+                            candidateUrl = match[0];
+                        } else if (match[1]) {
+                            candidateUrl = `https://instagram.com/${match[1]}`;
+                        } else if (match[0].includes('instagram.com/')) {
+                            candidateUrl = `https://${match[0]}`;
+                        } else {
+                            continue;
+                        }
+                        
+                        // 基本的なクリーンアップ
+                        candidateUrl = candidateUrl.replace(/[\?\/#].*$/, ''); // パラメータやフラグメント除去
+                        
+                        // 重複チェック
+                        const exists = instagramCandidates.find(candidate => candidate.url === candidateUrl);
+                        if (!exists) {
+                            // 関連度を計算（新しいURLの場合）
+                            let relevance = 0.5; // デフォルト関連度
+                            if (salonName) {
+                                relevance = calculateInstagramRelevance(candidateUrl, salonName);
+                            }
+                            
+                            // 関連度に関係なく候補に追加（関連度0でも追加）
+                            instagramCandidates.push({ url: candidateUrl, relevance: relevance });
+                            console.log(`    📱 Instagram候補追加 (直接パターン): ${candidateUrl} (関連度: ${(relevance * 100).toFixed(1)}%) [パターン: ${pattern.source.substring(0, 30)}...]`);
+                        }
                     }
                 }
 
@@ -430,25 +522,7 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                     }
                 }
 
-                // 電話番号を検索
-                const phonePatterns = [
-                    /0\d{1,4}-\d{1,4}-\d{3,4}/g,
-                    /TEL[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-                    /電話[:\s]*0\d{1,4}-\d{1,4}-\d{3,4}/gi,
-                ];
 
-                for (const pattern of phonePatterns) {
-                    const phoneMatches = text.match(pattern);
-                    if (phoneMatches && phoneMatches.length > 0) {
-                        for (const phone of phoneMatches) {
-                            const cleanPhone = phone.replace(/^(TEL[:\s]*|電話[:\s]*)/gi, '').trim();
-                            if (!phoneNumberCandidates.includes(cleanPhone)) {
-                                phoneNumberCandidates.push(cleanPhone);
-                                console.log(`    📞 電話番号候補: ${cleanPhone}`);
-                            }
-                        }
-                    }
-                }
 
                 // Google Business情報を抽出（改善された特定条件）
                 if (!googleBusinessInfo) {
@@ -524,21 +598,7 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                     }
                 }
 
-                // ホームページURLを検索
-                if (link && !link.includes('instagram.com') && !link.includes('hotpepper.jp') && 
-                    !link.includes('google.com') && !link.includes('facebook.com') && 
-                    !link.includes('twitter.com') && !link.includes('youtube.com')) {
-                    
-                    // サロン関連のドメインかどうかをチェック
-                    const text = `${title} ${snippet}`.toLowerCase();
-                    const salonKeywords = ['美容室', 'ヘアサロン', 'salon', 'hair', 'beauty', 'cut', 'カット'];
-                    const hasRelevantKeyword = salonKeywords.some(keyword => text.includes(keyword));
-                    
-                    if (hasRelevantKeyword && !homepageCandidates.includes(link)) {
-                        homepageCandidates.push(link);
-                        console.log(`    🏠 ホームページURL候補: ${link}`);
-                    }
-                }
+
             }
             
             // Instagram候補を関連度で並び替え
@@ -546,24 +606,33 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
             
             // 結果を格納
             const instagramUrls = instagramCandidates.map(candidate => candidate.url);
-            result.instagramCandidates = instagramUrls;
+            // Instagram候補を最大2つまでに制限
+            result.instagramCandidates = instagramUrls.slice(0, 2);
             result.emailCandidates = emailCandidates;
-            result.phoneNumberCandidates = phoneNumberCandidates;
-            result.homepageCandidates = homepageCandidates;
             
             // Google Business情報を追加
             if (googleBusinessInfo) {
                 result.googleBusinessInfo = googleBusinessInfo;
                 console.log(`    ✅ Google Business情報を設定しました`);
                 
-                // Google Business情報から不足している情報を補完
-                if (!result.phoneNumber && googleBusinessInfo.phoneNumber) {
-                    result.phoneNumber = googleBusinessInfo.phoneNumber;
-                    console.log(`    📞 Google Businessから電話番号を補完: ${result.phoneNumber}`);
-                }
+                // Google Business情報から不足している情報を補完（高信頼度）
                 if (!result.homepageUrl && googleBusinessInfo.website) {
                     result.homepageUrl = googleBusinessInfo.website;
                     console.log(`    🏠 Google Businessからウェブサイトを補完: ${result.homepageUrl}`);
+                }
+                
+                // Google Businessメールアドレスは最優先（信頼度が高いため）
+                if (googleBusinessInfo.email) {
+                    result.email = googleBusinessInfo.email;
+                    console.log(`    📧 Google Businessメールアドレスを優先採用: ${result.email}`);
+                    
+                    // Google Businessメールを候補の最初に追加
+                    if (!result.emailCandidates) {
+                        result.emailCandidates = [];
+                    }
+                    if (!result.emailCandidates.includes(googleBusinessInfo.email)) {
+                        result.emailCandidates.unshift(googleBusinessInfo.email); // 最初に追加
+                    }
                 }
             }
             
@@ -572,23 +641,17 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
                 result.instagramUrl = instagramCandidates[0].url;
                 console.log(`    ✅ 最高関連度Instagram URL: ${result.instagramUrl} (${(instagramCandidates[0].relevance * 100).toFixed(1)}%)`);
             }
-            if (emailCandidates.length > 0) {
+            if (emailCandidates.length > 0 && !result.email) {
                 result.email = emailCandidates[0];
             }
-            if (phoneNumberCandidates.length > 0) {
-                result.phoneNumber = phoneNumberCandidates[0];
-            }
-            if (homepageCandidates.length > 0) {
-                result.homepageUrl = homepageCandidates[0];
-            }
             
-            console.log(`    ✅ Instagram候補=${instagramUrls.length}件, Email候補=${emailCandidates.length}件, Phone候補=${phoneNumberCandidates.length}件, Homepage候補=${homepageCandidates.length}件`);
+            console.log(`    ✅ Instagram候補=${instagramUrls.length}件 (最大2件に制限), Email候補=${emailCandidates.length}件`);
             
         } else {
             console.log(`    ❌ Google API検索結果が見つかりませんでした`);
         }
 
-        console.log(`  🔍 Google API検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'} (候補${(result.instagramCandidates || []).length}件), Email=${result.email ? '✓' : '✗'} (候補${(result.emailCandidates || []).length}件), Phone=${result.phoneNumber ? '✓' : '✗'} (候補${(result.phoneNumberCandidates || []).length}件), GoogleBusiness=${result.googleBusinessInfo ? '✓' : '✗'}`);
+        console.log(`  🔍 Google API検索結果: Instagram=${result.instagramUrl ? '✓' : '✗'} (候補${(result.instagramCandidates || []).length}件), Email=${result.email ? '✓' : '✗'} (候補${(result.emailCandidates || []).length}件), GoogleBusiness=${result.googleBusinessInfo ? '✓' : '✗'}`);
         
         return result;
         
@@ -714,7 +777,6 @@ async function searchForBusinessInfo(salonName: string, address: string): Promis
     
     const foundItems: string[] = [];
     if (result.email) foundItems.push('メール');
-    if (result.phoneNumber) foundItems.push('電話番号');
     if (result.homepageUrl) foundItems.push('ホームページ');
     
     if (foundItems.length > 0) {
@@ -745,7 +807,6 @@ function mergeSearchResults(instagramResult: GoogleSearchResult, businessResult:
     
     // ビジネス情報は ビジネス情報検索結果を優先、なければInstagram検索結果
     merged.email = businessResult.email || instagramResult.email;
-    merged.phoneNumber = businessResult.phoneNumber || instagramResult.phoneNumber;
     merged.homepageUrl = businessResult.homepageUrl || instagramResult.homepageUrl;
     
     // Google Business情報はどちらにもある可能性があるため、より完全な方を優先
@@ -773,8 +834,6 @@ function mergeSearchResults(instagramResult: GoogleSearchResult, businessResult:
     };
     
     merged.emailCandidates = mergeArrays(businessResult.emailCandidates, instagramResult.emailCandidates);
-    merged.phoneNumberCandidates = mergeArrays(businessResult.phoneNumberCandidates, instagramResult.phoneNumberCandidates);
-    merged.homepageCandidates = mergeArrays(businessResult.homepageCandidates, instagramResult.homepageCandidates);
     
     return merged;
 }
@@ -1011,9 +1070,6 @@ function mergeMultipleSearchResults(results: GoogleSearchResult[]): GoogleSearch
         if (!merged.email && result.email) {
             merged.email = result.email;
         }
-        if (!merged.phoneNumber && result.phoneNumber) {
-            merged.phoneNumber = result.phoneNumber;
-        }
         if (!merged.homepageUrl && result.homepageUrl) {
             merged.homepageUrl = result.homepageUrl;
         }
@@ -1025,21 +1081,15 @@ function mergeMultipleSearchResults(results: GoogleSearchResult[]): GoogleSearch
     // 候補配列をマージ（重複排除）
     const allInstagramCandidates: string[] = [];
     const allEmailCandidates: string[] = [];
-    const allPhoneCandidates: string[] = [];
-    const allHomepageCandidates: string[] = [];
     
     for (const result of results) {
         if (result.instagramCandidates) allInstagramCandidates.push(...result.instagramCandidates);
         if (result.emailCandidates) allEmailCandidates.push(...result.emailCandidates);
-        if (result.phoneNumberCandidates) allPhoneCandidates.push(...result.phoneNumberCandidates);
-        if (result.homepageCandidates) allHomepageCandidates.push(...result.homepageCandidates);
     }
     
     // 重複排除
     merged.instagramCandidates = [...new Set(allInstagramCandidates)];
     merged.emailCandidates = [...new Set(allEmailCandidates)];
-    merged.phoneNumberCandidates = [...new Set(allPhoneCandidates)];
-    merged.homepageCandidates = [...new Set(allHomepageCandidates)];
     
     return merged;
 }
@@ -1089,7 +1139,7 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
         const googleResult = await searchGoogleApi(instagramQuery, salonName);
         if (Object.keys(googleResult).length > 0) {
             searchResults.push(googleResult);
-            console.log(`    ✅ Google Instagram検索: Instagram=${googleResult.instagramUrl ? '✓' : '✗'}, Email=${googleResult.email ? '✓' : '✗'}, Phone=${googleResult.phoneNumber ? '✓' : '✗'}, GoogleBusiness=${googleResult.googleBusinessInfo ? '✓' : '✗'}`);
+            console.log(`    ✅ Google Instagram検索: Instagram=${googleResult.instagramUrl ? '✓' : '✗'}, Email=${googleResult.email ? '✓' : '✗'}, GoogleBusiness=${googleResult.googleBusinessInfo ? '✓' : '✗'}`);
         }
     }
     
@@ -1100,7 +1150,7 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
         const businessResult = await searchGoogleApi(businessQuery, salonName);
         
         if (Object.keys(businessResult).length > 0) {
-            console.log(`    ✅ Google Business検索: GoogleBusiness=${businessResult.googleBusinessInfo ? '✓' : '✗'}, Phone=${businessResult.phoneNumber ? '✓' : '✗'}, Email=${businessResult.email ? '✓' : '✗'}`);
+            console.log(`    ✅ Google Business検索: GoogleBusiness=${businessResult.googleBusinessInfo ? '✓' : '✗'}, Email=${businessResult.email ? '✓' : '✗'}`);
             
             // 既存の結果とマージ
             if (searchResults.length > 0) {
@@ -1111,7 +1161,6 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
                     instagramUrl: businessResult.instagramUrl || existingResult.instagramUrl,
                     // Google Business情報を優先してマージ
                     googleBusinessInfo: businessResult.googleBusinessInfo || existingResult.googleBusinessInfo,
-                    phoneNumber: businessResult.phoneNumber || existingResult.phoneNumber,
                     email: businessResult.email || existingResult.email,
                     homepageUrl: businessResult.homepageUrl || existingResult.homepageUrl,
                 };
@@ -1121,17 +1170,9 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
                     ...(existingResult.instagramCandidates || []),
                     ...(businessResult.instagramCandidates || [])
                 ])];
-                mergedResult.phoneNumberCandidates = [...new Set([
-                    ...(existingResult.phoneNumberCandidates || []),
-                    ...(businessResult.phoneNumberCandidates || [])
-                ])];
                 mergedResult.emailCandidates = [...new Set([
                     ...(existingResult.emailCandidates || []),
                     ...(businessResult.emailCandidates || [])
-                ])];
-                mergedResult.homepageCandidates = [...new Set([
-                    ...(existingResult.homepageCandidates || []),
-                    ...(businessResult.homepageCandidates || [])
                 ])];
                 
                 // デバッグ: マージ後のInstagram情報を確認
@@ -1207,7 +1248,6 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
     const summaryItems: string[] = [];
     if (mergedResult.instagramUrl) summaryItems.push('Instagram');
     if (mergedResult.email) summaryItems.push('メール');
-    if (mergedResult.phoneNumber) summaryItems.push('電話番号');
     if (mergedResult.homepageUrl) summaryItems.push('ホームページ');
     if (mergedResult.googleBusinessInfo) {
         const businessItems: string[] = [];
