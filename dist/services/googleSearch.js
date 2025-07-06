@@ -289,7 +289,6 @@ async function searchGoogleApi(query) {
         return {};
     }
     try {
-        console.log(`  🔍 Google Search API検索を実行中...`);
         console.log(`  🔍 検索クエリ: "${query}"`);
         // Google Custom Search API URLを構築
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=10&lr=lang_ja&gl=jp`;

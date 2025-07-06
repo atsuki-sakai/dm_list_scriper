@@ -1,7 +1,7 @@
 "use strict";
 // ======================= 定数定義 ========================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SELECTORS = exports.YAHOO_SEARCH = exports.BRING_SEARCH = exports.DELAY_MS = exports.AREA_URL_MAP = void 0;
+exports.SELECTORS = exports.YAHOO_SEARCH = exports.BRING_SEARCH = exports.FULL_PAGE_MAP = exports.DELAY_MS = exports.AREA_URL_MAP = void 0;
 /** エリア名とHotPepper Beautyのエリア別トップページURLのマッピング */
 exports.AREA_URL_MAP = {
     '北海道': 'https://beauty.hotpepper.jp/svcSD/',
@@ -16,6 +16,8 @@ exports.AREA_URL_MAP = {
 };
 /** 遅延時間の定数 */
 exports.DELAY_MS = 100;
+/** Google検索結果のフルページマップを有効にするかどうかの設定 */
+exports.FULL_PAGE_MAP = false;
 // ======================= 検索エンジン設定 ========================
 /**
  * Bing検索を有効にするかどうかの設定

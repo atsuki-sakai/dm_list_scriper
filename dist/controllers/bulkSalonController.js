@@ -54,6 +54,7 @@ function normalizeSearchResult(searchResult, salonName) {
  * @param areaSelection エリア選択情報（CSV出力用）
  */
 async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
+    const startTime = Date.now(); // ⏱ 処理開始時間を記録
     try {
         // 検索エンジンの無効化状態をリセット（新しい処理セッション開始）
         (0, googleSearch_1.resetEngineStatus)();
@@ -86,9 +87,16 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
                 }
                 // 新しいInstagram検索機能を使用
                 const searchQuery = `ヘアサロン ${salonDetails.name} ${salonDetails.address} Instagram`;
-                console.log(`  🚀 複数Instagram検索クエリによる検索を開始...`);
                 console.log(`  🔍 ベース検索クエリ: ${searchQuery}`);
-                const initialResult = await (0, googleSearchNew_1.searchWithMultipleInstagramQueries)(salonDetails.name, salonDetails.address);
+                let initialResult;
+                try {
+                    initialResult = await (0, googleSearchNew_1.searchWithMultipleInstagramQueries)(salonDetails.name, salonDetails.address);
+                }
+                catch (error) {
+                    (0, display_1.displayError)('Google Search APIが利用できません。処理を終了します。');
+                    console.error('エラー詳細:', error);
+                    process.exit(1);
+                }
                 // 検索結果を正規化
                 const googleResult = normalizeSearchResult(initialResult, salonDetails.name);
                 // Instagram URLの関連性をチェック（無関係なものを除外）
@@ -159,6 +167,9 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
         else {
             (0, display_1.displayError)('処理できたサロン情報がありませんでした。');
         }
+        // 6. 実行時間を表示
+        const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`\n⏱ 処理時間: ${elapsedSec} 秒`);
     }
     catch (error) {
         (0, display_1.displayError)('バルク処理でエラーが発生しました', error);

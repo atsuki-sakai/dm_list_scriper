@@ -16,6 +16,9 @@ export const AREA_URL_MAP: Readonly<Record<string, string>> = {
 /** 遅延時間の定数 */
 export const DELAY_MS = 100;
 
+/** Google検索結果のフルページマップを有効にするかどうかの設定 */
+export const FULL_PAGE_MAP = false;
+
 // ======================= 検索エンジン設定 ========================
 
 /**

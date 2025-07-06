@@ -256,7 +256,6 @@ export function calculateInstagramRelevance(instagramUrl: string, salonName: str
     return finalScore;
 }
 
-
 /**
  * Google検索結果からInstagram URLを抽出する（シンプル版）
  * @param searchItem Google検索結果のアイテム
@@ -267,11 +266,6 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
     const title = searchItem.title || '';
     const link = searchItem.link || '';
     const snippet = searchItem.snippet || '';
-    
-    // Instagram抽出処理開始
-    console.log(`      タイトル: "${title}"`);
-    console.log(`      リンク: "${link}"`);
-    console.log(`      スニペット: "${snippet}"`);
     
     let extractedUrl: string | null = null;
     
@@ -343,7 +337,7 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
     // 3. 拡張されたテキスト検索（複数のパターンに対応）
     if (!extractedUrl) {
         const fullText = `${title} ${snippet}`;
-        console.log(`        🔍 テキスト検索: "${fullText}"`);
+      
         
         // Instagram URLの様々なパターンを定義
         const patterns = [
@@ -401,7 +395,7 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
     }
     
     if (!extractedUrl) {
-        console.log(`      ❌ Instagram URL抽出失敗: すべてのステップで見つかりませんでした`);
+        
         return null;
     }
     
@@ -418,4 +412,25 @@ export function extractInstagramFromSearchItem(searchItem: any, salonName?: stri
         url: extractedUrl,
         relevance: relevance
     };
+}
+
+export function selectBestInstagramUrl(candidates: string[], salonName: string): string | undefined {
+    if (!candidates || candidates.length === 0) return undefined;
+
+    let bestUrl: string | undefined;
+    let bestScore = 0;
+
+    for (const candidate of candidates) {
+        const cleanUrl = cleanInstagramUrl(candidate);
+        if (!cleanUrl) continue; // 無効なURLはスキップ
+
+        const score = calculateInstagramRelevance(cleanUrl, salonName);
+        if (score > bestScore) {
+            bestScore = score;
+            bestUrl = cleanUrl;
+        }
+    }
+
+    // スコアが 0 の場合は関連性なしと判断して undefined を返す
+    return bestScore > 0 ? bestUrl : undefined;
 } 

@@ -56,8 +56,6 @@ const disabledEngines = {
     google: false,
     bing: false,
     yahoo: false,
-    goo: false,
-    baidu: false
 };
 /**
  * 検索エンジンを無効化する
@@ -88,11 +86,6 @@ function resetEngineStatus() {
  * 現在の検索エンジン状態を表示
  */
 function showEngineStatus() {
-    console.log('  📊 検索エンジン状態:');
-    // 設定による有効/無効状態を表示
-    console.log('  📊 設定による検索エンジン制御:');
-    console.log(`    BING: ${index_2.BRING_SEARCH ? '✅ 有効' : '❌ 無効 (設定により)'}`);
-    console.log(`    YAHOO: ${index_2.YAHOO_SEARCH ? '✅ 有効' : '❌ 無効 (設定により)'}`);
     // 動的な無効化状態を表示
     console.log('  📊 動的無効化状態 (エラーによる):');
     Object.entries(disabledEngines).forEach(([engine, disabled]) => {
@@ -114,10 +107,6 @@ const GOOGLE_SEARCH_ENGINE_ID = process.env.GOOGLE_SEARCH_ENGINE_ID;
 function isGoogleApiAvailable() {
     const hasApiKey = !!GOOGLE_API_KEY;
     const hasEngineId = !!GOOGLE_SEARCH_ENGINE_ID;
-    // デバッグ情報を表示
-    console.log(`  🔍 Google API設定チェック:`);
-    console.log(`    API Key: ${hasApiKey ? '✅ 設定済み' : '❌ 未設定'}`);
-    console.log(`    Engine ID: ${hasEngineId ? '✅ 設定済み' : '❌ 未設定'}`);
     return hasApiKey && hasEngineId;
 }
 /**
@@ -307,7 +296,7 @@ async function searchGoogleApi(query, salonName) {
     try {
         console.log(`  🔍 Google Search API検索を実行中: "${query}"`);
         // Google Custom Search API URLを構築
-        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=10&lr=lang_ja&gl=jp`;
+        const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=5&lr=lang_ja&gl=jp`;
         const { data } = await axios_1.default.get(searchUrl, {
             timeout: 15000
         });
@@ -322,94 +311,96 @@ async function searchGoogleApi(query, salonName) {
             console.log(`    📋 === Google Custom Search API レスポンス詳細 ===`);
             console.log(`    📋 検索クエリ: "${query}"`);
             console.log(`    📋 検索結果総数: ${data.items.length}件`);
-            data.items.forEach((item, index) => {
-                console.log(`    📋 [${index + 1}] ================================`);
-                console.log(`      🏷️  タイトル: "${item.title}"`);
-                console.log(`      🔗 リンク: "${item.link}"`);
-                console.log(`      📝 表示リンク: "${item.displayLink || 'なし'}"`);
-                console.log(`      📄 スニペット: "${item.snippet}"`);
-                // htmlSnippetも確認
-                if (item.htmlSnippet) {
-                    console.log(`      📄 HTML スニペット: "${item.htmlSnippet}"`);
-                }
-                // pagemapの詳細確認
-                if (item.pagemap) {
-                    console.log(`      📋 pagemap構造:`);
-                    // metatags
-                    if (item.pagemap.metatags && item.pagemap.metatags.length > 0) {
-                        console.log(`        📊 metatags (${item.pagemap.metatags.length}件):`);
-                        item.pagemap.metatags.forEach((meta, metaIndex) => {
-                            console.log(`          [${metaIndex}] og:url: "${meta['og:url'] || 'なし'}"`);
-                            console.log(`          [${metaIndex}] og:title: "${meta['og:title'] || 'なし'}"`);
-                            console.log(`          [${metaIndex}] og:description: "${meta['og:description'] || 'なし'}"`);
-                            console.log(`          [${metaIndex}] og:image: "${meta['og:image'] || 'なし'}"`);
-                            console.log(`          [${metaIndex}] twitter:url: "${meta['twitter:url'] || 'なし'}"`);
-                            console.log(`          [${metaIndex}] canonical: "${meta['canonical'] || 'なし'}"`);
-                        });
+            if (index_2.FULL_PAGE_MAP) {
+                data.items.forEach((item, index) => {
+                    console.log(`    📋 [${index + 1}] ================================`);
+                    console.log(`      🏷️  タイトル: "${item.title}"`);
+                    console.log(`      🔗 リンク: "${item.link}"`);
+                    console.log(`      📝 表示リンク: "${item.displayLink || 'なし'}"`);
+                    console.log(`      📄 スニペット: "${item.snippet}"`);
+                    // htmlSnippetも確認
+                    if (item.htmlSnippet) {
+                        console.log(`      📄 HTML スニペット: "${item.htmlSnippet}"`);
                     }
-                    else {
-                        console.log(`        📊 metatags: なし`);
-                    }
-                    // person情報
-                    if (item.pagemap.person && item.pagemap.person.length > 0) {
-                        console.log(`        👤 person (${item.pagemap.person.length}件):`);
-                        item.pagemap.person.forEach((person, personIndex) => {
-                            console.log(`          [${personIndex}] url: "${person.url || 'なし'}"`);
-                            console.log(`          [${personIndex}] name: "${person.name || 'なし'}"`);
-                        });
-                    }
-                    // localbusiness情報
-                    if (item.pagemap.localbusiness && item.pagemap.localbusiness.length > 0) {
-                        console.log(`        🏢 localbusiness (${item.pagemap.localbusiness.length}件):`);
-                        item.pagemap.localbusiness.forEach((business, businessIndex) => {
-                            console.log(`          [${businessIndex}] name: "${business.name || 'なし'}"`);
-                            console.log(`          [${businessIndex}] url: "${business.url || 'なし'}"`);
-                            console.log(`          [${businessIndex}] telephone: "${business.telephone || 'なし'}"`);
-                            console.log(`          [${businessIndex}] address: "${business.address || 'なし'}"`);
-                        });
-                    }
-                    // その他のpagemap構造
-                    const pagemapKeys = Object.keys(item.pagemap);
-                    if (pagemapKeys.length > 0) {
-                        console.log(`        🗝️  その他のpagemap keys: ${pagemapKeys.join(', ')}`);
-                    }
-                }
-                else {
-                    console.log(`      📋 pagemap: なし`);
-                }
-                // Instagram関連の文字列検索（強化デバッグ）
-                const allText = `${item.title} ${item.snippet} ${item.link} ${item.displayLink}`;
-                const hasInstagramKeyword = allText.toLowerCase().includes('instagram');
-                console.log(`      📱 Instagram関連キーワード含有: ${hasInstagramKeyword ? '✅ あり' : '❌ なし'}`);
-                if (hasInstagramKeyword) {
-                    // Instagram関連の部分を抽出
-                    const instagramMatches = allText.match(/[^.]*instagram[^.]*/gi);
-                    if (instagramMatches) {
-                        console.log(`        📱 Instagram関連部分:`);
-                        instagramMatches.forEach((match, matchIndex) => {
-                            console.log(`          [${matchIndex}] "${match.trim()}"`);
-                        });
-                    }
-                    // URL形式の詳細チェック
-                    console.log(`        🔍 URL形式詳細チェック:`);
-                    const urlPatterns = [
-                        /instagram\.com\/[a-zA-Z0-9_\.]+/gi,
-                        /›\s*instagram\.com\s*›\s*[a-zA-Z0-9_\.]+/gi,
-                        /@[a-zA-Z0-9_\.]+/gi
-                    ];
-                    urlPatterns.forEach((pattern, patternIndex) => {
-                        const matches = allText.match(pattern);
-                        if (matches) {
-                            console.log(`          パターン${patternIndex + 1} (${pattern.source}): ${matches.length}件`);
-                            matches.forEach((match, matchIndex) => {
-                                console.log(`            [${matchIndex}] "${match}"`);
+                    // pagemapの詳細確認
+                    if (item.pagemap) {
+                        console.log(`      📋 pagemap構造:`);
+                        // metatags
+                        if (item.pagemap.metatags && item.pagemap.metatags.length > 0) {
+                            console.log(`        📊 metatags (${item.pagemap.metatags.length}件):`);
+                            item.pagemap.metatags.forEach((meta, metaIndex) => {
+                                console.log(`          [${metaIndex}] og:url: "${meta['og:url'] || 'なし'}"`);
+                                console.log(`          [${metaIndex}] og:title: "${meta['og:title'] || 'なし'}"`);
+                                console.log(`          [${metaIndex}] og:description: "${meta['og:description'] || 'なし'}"`);
+                                console.log(`          [${metaIndex}] og:image: "${meta['og:image'] || 'なし'}"`);
+                                console.log(`          [${metaIndex}] twitter:url: "${meta['twitter:url'] || 'なし'}"`);
+                                console.log(`          [${metaIndex}] canonical: "${meta['canonical'] || 'なし'}"`);
                             });
                         }
-                    });
-                }
-                console.log(`    ---`);
-            });
-            console.log(`    📋 === レスポンス詳細終了 ===`);
+                        else {
+                            console.log(`        📊 metatags: なし`);
+                        }
+                        // person情報
+                        if (item.pagemap.person && item.pagemap.person.length > 0) {
+                            console.log(`        👤 person (${item.pagemap.person.length}件):`);
+                            item.pagemap.person.forEach((person, personIndex) => {
+                                console.log(`          [${personIndex}] url: "${person.url || 'なし'}"`);
+                                console.log(`          [${personIndex}] name: "${person.name || 'なし'}"`);
+                            });
+                        }
+                        // localbusiness情報
+                        if (item.pagemap.localbusiness && item.pagemap.localbusiness.length > 0) {
+                            console.log(`        🏢 localbusiness (${item.pagemap.localbusiness.length}件):`);
+                            item.pagemap.localbusiness.forEach((business, businessIndex) => {
+                                console.log(`          [${businessIndex}] name: "${business.name || 'なし'}"`);
+                                console.log(`          [${businessIndex}] url: "${business.url || 'なし'}"`);
+                                console.log(`          [${businessIndex}] telephone: "${business.telephone || 'なし'}"`);
+                                console.log(`          [${businessIndex}] address: "${business.address || 'なし'}"`);
+                            });
+                        }
+                        // その他のpagemap構造
+                        const pagemapKeys = Object.keys(item.pagemap);
+                        if (pagemapKeys.length > 0) {
+                            console.log(`        🗝️  その他のpagemap keys: ${pagemapKeys.join(', ')}`);
+                        }
+                    }
+                    else {
+                        console.log(`      📋 pagemap: なし`);
+                    }
+                    // Instagram関連の文字列検索（強化デバッグ）
+                    const allText = `${item.title} ${item.snippet} ${item.link} ${item.displayLink}`;
+                    const hasInstagramKeyword = allText.toLowerCase().includes('instagram');
+                    console.log(`      📱 Instagram関連キーワード含有: ${hasInstagramKeyword ? '✅ あり' : '❌ なし'}`);
+                    if (hasInstagramKeyword) {
+                        // Instagram関連の部分を抽出
+                        const instagramMatches = allText.match(/[^.]*instagram[^.]*/gi);
+                        if (instagramMatches) {
+                            console.log(`        📱 Instagram関連部分:`);
+                            instagramMatches.forEach((match, matchIndex) => {
+                                console.log(`          [${matchIndex}] "${match.trim()}"`);
+                            });
+                        }
+                        // URL形式の詳細チェック
+                        console.log(`        🔍 URL形式詳細チェック:`);
+                        const urlPatterns = [
+                            /instagram\.com\/[a-zA-Z0-9_\.]+/gi,
+                            /›\s*instagram\.com\s*›\s*[a-zA-Z0-9_\.]+/gi,
+                            /@[a-zA-Z0-9_\.]+/gi
+                        ];
+                        urlPatterns.forEach((pattern, patternIndex) => {
+                            const matches = allText.match(pattern);
+                            if (matches) {
+                                console.log(`          パターン${patternIndex + 1} (${pattern.source}): ${matches.length}件`);
+                                matches.forEach((match, matchIndex) => {
+                                    console.log(`            [${matchIndex}] "${match}"`);
+                                });
+                            }
+                        });
+                    }
+                    console.log(`    ---`);
+                });
+                console.log(`    📋 === レスポンス詳細終了 ===`);
+            }
             // 各検索結果を調べて候補を収集
             for (const item of data.items) {
                 const link = item.link || '';
@@ -545,20 +536,6 @@ async function searchGoogleApi(query, salonName) {
                         if (Object.keys(businessInfo).length > 0) {
                             googleBusinessInfo = businessInfo;
                             console.log(`    🏢 Google Business情報発見 (${link.includes('google.com') ? 'Google Maps' : 'ビジネス情報サイト'}):`);
-                            if (businessInfo.rating)
-                                console.log(`      ⭐ 評価: ${businessInfo.rating}`);
-                            if (businessInfo.reviewCount)
-                                console.log(`      📝 レビュー数: ${businessInfo.reviewCount}`);
-                            if (businessInfo.businessHours)
-                                console.log(`      🕒 営業時間: ${businessInfo.businessHours}`);
-                            if (businessInfo.businessStatus)
-                                console.log(`      📊 営業状況: ${businessInfo.businessStatus}`);
-                            if (businessInfo.phoneNumber)
-                                console.log(`      📞 電話番号: ${businessInfo.phoneNumber}`);
-                            if (businessInfo.address)
-                                console.log(`      📍 住所: ${businessInfo.address}`);
-                            if (businessInfo.website)
-                                console.log(`      🌐 ウェブサイト: ${businessInfo.website}`);
                         }
                     }
                     else {
@@ -567,12 +544,6 @@ async function searchGoogleApi(query, salonName) {
                         if (businessInfo.rating || businessInfo.businessHours || businessInfo.phoneNumber) {
                             googleBusinessInfo = businessInfo;
                             console.log(`    🏢 フォールバック: ビジネス情報を部分的に発見`);
-                            if (businessInfo.rating)
-                                console.log(`      ⭐ 評価: ${businessInfo.rating}`);
-                            if (businessInfo.businessHours)
-                                console.log(`      🕒 営業時間: ${businessInfo.businessHours}`);
-                            if (businessInfo.phoneNumber)
-                                console.log(`      📞 電話番号: ${businessInfo.phoneNumber}`);
                         }
                     }
                 }
@@ -587,7 +558,6 @@ async function searchGoogleApi(query, salonName) {
             // Google Business情報を追加
             if (googleBusinessInfo) {
                 result.googleBusinessInfo = googleBusinessInfo;
-                console.log(`    ✅ Google Business情報を設定しました`);
                 // Google Business情報から不足している情報を補完（高信頼度）
                 if (!result.homepageUrl && googleBusinessInfo.website) {
                     result.homepageUrl = googleBusinessInfo.website;
@@ -645,8 +615,8 @@ async function searchGoogleApi(query, salonName) {
 async function searchWithMultipleInstagramQueries(salonName, address) {
     console.log(`  🚀 2段階最適化Instagram検索を開始: "${salonName}"`);
     if (!isGoogleApiAvailable() || !isEngineEnabled('google')) {
-        console.log('  ⚠️  Google Search APIが利用できません');
-        return {};
+        console.error('  ❌ Google Search APIが利用できません');
+        throw new Error('Google Search APIが利用できません。環境変数 GOOGLE_API_KEY と GOOGLE_SEARCH_ENGINE_ID を設定してください。');
     }
     // 新しい2段階検索を使用（searchGoogleWithSalonNameに委譲）
     const dummyQuery = `ヘアサロン ${salonName} Instagram`; // 後方互換性のため
@@ -702,7 +672,6 @@ async function searchForInstagram(salonName, address) {
         // 住所がない場合は従来のクエリ
         instagramQuery = `ヘアサロン ${salonName} Instagram`;
     }
-    console.log(`    🔍 Instagram検索クエリ: "${instagramQuery}"`);
     const result = await searchGoogleApi(instagramQuery, salonName);
     if (result.instagramUrl) {
         console.log(`    ✅ Instagram URL発見: ${result.instagramUrl}`);
@@ -904,7 +873,7 @@ async function searchYahoo(query) {
             }
             const href = $(el).attr('href');
             if (href && !instagramUrl) {
-                if (href.includes('/RU=')) {
+                if (href.includes('/RU=https%3A//instagram.com/...')) {
                     // Yahooリダイレクト形式: /RU=https%3A//instagram.com/...
                     const match = href.match(/\/RU=([^\/]+)/);
                     if (match) {
@@ -1005,12 +974,9 @@ function mergeMultipleSearchResults(results) {
  * @returns 抽出された統合情報
  */
 async function searchGoogleWithSalonName(query, salonName, address) {
-    console.log('  🚀 次世代マルチエンジン検索を開始...');
+    console.log('💻 マルチエンジン検索を開始...');
     // 検索エンジンの状態を表示
     showEngineStatus();
-    // 新しい検索オプションの状態表示
-    console.log('  📊 高精度検索オプション:');
-    console.log(`    Google Search API: ${isGoogleApiAvailable() && isEngineEnabled('google') ? '✅ 利用可能' : '❌ 無効/未設定'}`);
     if (!salonName) {
         console.log('  ⚠️  サロン名が指定されていません。従来の単一検索を実行...');
         // Google APIが利用可能な場合のみ実行
@@ -1030,78 +996,52 @@ async function searchGoogleWithSalonName(query, salonName, address) {
     }
     console.log(`  🔍 Instagram検索クエリ: "${instagramQuery}"`);
     const searchResults = [];
-    // 🔍 Priority 1: Google Search API（メイン検索）
+    // === 🔄 並列検索ロジック開始 ===
+    // Google / Bing / Yahoo を同時に実行し、完了したものから結果を取り込む
+    const parallelPromises = [];
+    const engineLabels = [];
+    // Google Custom Search API
     if (isEngineEnabled('google') && isGoogleApiAvailable()) {
-        console.log('  📡 Google Search API (Instagram検索) 実行中...');
-        const googleResult = await searchGoogleApi(instagramQuery, salonName);
-        if (Object.keys(googleResult).length > 0) {
-            searchResults.push(googleResult);
-            console.log(`    ✅ Google Instagram検索: Instagram=${googleResult.instagramUrl ? '✓' : '✗'}, Email=${googleResult.email ? '✓' : '✗'}, GoogleBusiness=${googleResult.googleBusinessInfo ? '✓' : '✗'}`);
-        }
+        console.log('  📡 Google Search API (Instagram検索) 実行中（並列）...');
+        parallelPromises.push(searchGoogleApi(instagramQuery, salonName));
+        engineLabels.push('Google');
     }
-    // Priority 1.5: Google Business情報専用検索（追加のビジネス情報取得）
-    if (isEngineEnabled('google') && isGoogleApiAvailable() && address) {
-        console.log('  🏢 Google Business情報専用検索を実行中...');
-        const businessQuery = `${salonName} ${address}`;
-        const businessResult = await searchGoogleApi(businessQuery, salonName);
-        if (Object.keys(businessResult).length > 0) {
-            console.log(`    ✅ Google Business検索: GoogleBusiness=${businessResult.googleBusinessInfo ? '✓' : '✗'}, Email=${businessResult.email ? '✓' : '✗'}`);
-            // 既存の結果とマージ
-            if (searchResults.length > 0) {
-                const existingResult = searchResults[0];
-                const mergedResult = {
-                    ...existingResult,
-                    // Instagram情報: Business検索で見つかった場合は優先、なければ既存のまま
-                    instagramUrl: businessResult.instagramUrl || existingResult.instagramUrl,
-                    // Google Business情報を優先してマージ
-                    googleBusinessInfo: businessResult.googleBusinessInfo || existingResult.googleBusinessInfo,
-                    email: businessResult.email || existingResult.email,
-                    homepageUrl: businessResult.homepageUrl || existingResult.homepageUrl,
-                };
-                // 候補も統合（Instagram候補も追加）
-                mergedResult.instagramCandidates = [...new Set([
-                        ...(existingResult.instagramCandidates || []),
-                        ...(businessResult.instagramCandidates || [])
-                    ])];
-                mergedResult.emailCandidates = [...new Set([
-                        ...(existingResult.emailCandidates || []),
-                        ...(businessResult.emailCandidates || [])
-                    ])];
-                // デバッグ: マージ後のInstagram情報を確認
-                console.log(`    🔧 マージ処理後のInstagram情報:`);
-                console.log(`      Instagram URL: ${mergedResult.instagramUrl || 'なし'}`);
-                console.log(`      Instagram候補: ${(mergedResult.instagramCandidates || []).length}件`);
-                if (mergedResult.instagramCandidates && mergedResult.instagramCandidates.length > 0) {
-                    mergedResult.instagramCandidates.forEach((candidate, index) => {
-                        console.log(`        [${index + 1}] ${candidate}`);
-                    });
-                }
-                searchResults[0] = mergedResult;
-                console.log('    🔄 Instagram検索結果とBusiness検索結果をマージしました');
+    // Bing スクレイピング
+    if (index_2.BRING_SEARCH && isEngineEnabled('bing')) {
+        console.log('  🔍 Bing検索実行中（並列）...');
+        parallelPromises.push(searchBing(instagramQuery));
+        engineLabels.push('Bing');
+    }
+    // Yahoo スクレイピング
+    if (index_2.YAHOO_SEARCH && isEngineEnabled('yahoo')) {
+        console.log('  🎯 Yahoo検索実行中（並列）...');
+        parallelPromises.push(searchYahoo(instagramQuery));
+        engineLabels.push('Yahoo');
+    }
+    // 並列実行結果を取得（すべて完了を待つ）
+    const settledResults = await Promise.allSettled(parallelPromises);
+    // 成功したものだけを抽出し、デバッグ出力
+    settledResults.forEach((res, idx) => {
+        const label = engineLabels[idx];
+        if (res.status === 'fulfilled') {
+            const value = res.value;
+            if (Object.keys(value).length > 0) {
+                searchResults.push(value);
+                console.log(`    ✅ ${label}: Instagram=${value.instagramUrl ? '✓' : '✗'}, Email=${value.email ? '✓' : '✗'}`);
             }
             else {
-                searchResults.push(businessResult);
+                console.log(`    ✗ ${label}: 結果なし`);
             }
         }
-    }
-    // 🔎 Priority 2: Bing検索（追加検索）
-    if (index_2.BRING_SEARCH && isEngineEnabled('bing')) {
-        console.log('  🔍 Bing検索実行中（追加検索）...');
-        const bingResult = await searchBing(instagramQuery);
-        if (Object.keys(bingResult).length > 0) {
-            searchResults.push(bingResult);
-            console.log(`    ✅ Bing: Instagram=${bingResult.instagramUrl ? '✓' : '✗'}, Email=${bingResult.email ? '✓' : '✗'}`);
+        else {
+            console.error(`    ❌ ${label}検索失敗: ${res.reason}`);
+            // Google Search API が失敗した場合は処理を終了
+            if (label === 'Google') {
+                throw new Error('Google Search API でエラーが発生したため処理を終了します');
+            }
         }
-    }
-    // 🔍 Priority 3: Yahoo検索（追加検索）
-    if (index_2.YAHOO_SEARCH && isEngineEnabled('yahoo')) {
-        console.log('  🎯 Yahoo検索実行中（追加検索）...');
-        const yahooResult = await searchYahoo(instagramQuery);
-        if (Object.keys(yahooResult).length > 0) {
-            searchResults.push(yahooResult);
-            console.log(`    ✅ Yahoo: Instagram=${yahooResult.instagramUrl ? '✓' : '✗'}, Email=${yahooResult.email ? '✓' : '✗'}`);
-        }
-    }
+    });
+    // === 🔄 並列検索ロジック終了 ===
     // 検索結果がない場合の処理
     if (searchResults.length === 0) {
         console.log('  😞 すべての検索エンジンで結果が得られませんでした');
@@ -1120,6 +1060,13 @@ async function searchGoogleWithSalonName(query, salonName, address) {
         }
     });
     const mergedResult = mergeMultipleSearchResults(searchResults);
+    // Instagram候補から最適なURLを選択
+    if (mergedResult.instagramCandidates && mergedResult.instagramCandidates.length > 0) {
+        const best = (0, instagramExtractor_1.selectBestInstagramUrl)(mergedResult.instagramCandidates, salonName);
+        if (best) {
+            mergedResult.instagramUrl = best;
+        }
+    }
     console.log(`  🔧 === マージ後デバッグ情報 ===`);
     console.log(`    マージ後 Instagram URL: ${mergedResult.instagramUrl || 'なし'}`);
     console.log(`    マージ後 Instagram候補: ${(mergedResult.instagramCandidates || []).length}件`);
@@ -1129,6 +1076,35 @@ async function searchGoogleWithSalonName(query, salonName, address) {
         });
     }
     console.log(`  🔧 === マージデバッグ情報終了 ===`);
+    // === 🏢 Google Business情報専用検索（並列後に追加実行） ===
+    if (isEngineEnabled('google') && isGoogleApiAvailable() && address) {
+        console.log('  🏢 Google Business情報専用検索を実行中...');
+        const businessQuery = `${salonName} ${address}`;
+        const businessResult = await searchGoogleApi(businessQuery, salonName);
+        if (Object.keys(businessResult).length > 0) {
+            console.log(`    ✅ Google Business検索: GoogleBusiness=${businessResult.googleBusinessInfo ? '✓' : '✗'}, Email=${businessResult.email ? '✓' : '✗'}`);
+            // 既存の結果とマージ（最初の結果をベースに）
+            if (searchResults.length > 0) {
+                const existing = searchResults[0];
+                const merged = {
+                    ...existing,
+                    instagramUrl: businessResult.instagramUrl || existing.instagramUrl,
+                    googleBusinessInfo: businessResult.googleBusinessInfo || existing.googleBusinessInfo,
+                    email: businessResult.email || existing.email,
+                    homepageUrl: businessResult.homepageUrl || existing.homepageUrl,
+                    instagramCandidates: [...new Set([...(existing.instagramCandidates || []), ...(businessResult.instagramCandidates || [])])],
+                    emailCandidates: [...new Set([...(existing.emailCandidates || []), ...(businessResult.emailCandidates || [])])],
+                };
+                // 先頭を置き換え
+                searchResults[0] = merged;
+                // デバッグ
+                console.log('    🔄 Instagram検索結果とBusiness検索結果をマージしました');
+            }
+            else {
+                searchResults.push(businessResult);
+            }
+        }
+    }
     // 最終結果をログ出力
     const summaryItems = [];
     if (mergedResult.instagramUrl)

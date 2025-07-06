@@ -8,6 +8,7 @@ exports.cleanInstagramUrl = cleanInstagramUrl;
 exports.generateInstagramSearchQueries = generateInstagramSearchQueries;
 exports.calculateInstagramRelevance = calculateInstagramRelevance;
 exports.extractInstagramFromSearchItem = extractInstagramFromSearchItem;
+exports.selectBestInstagramUrl = selectBestInstagramUrl;
 // ======================= Instagram URL抽出 ========================
 /**
  * Instagram URLをクリーンアップして正規化する（シンプル版）
@@ -234,10 +235,6 @@ function extractInstagramFromSearchItem(searchItem, salonName) {
     const title = searchItem.title || '';
     const link = searchItem.link || '';
     const snippet = searchItem.snippet || '';
-    // Instagram抽出処理開始
-    console.log(`      タイトル: "${title}"`);
-    console.log(`      リンク: "${link}"`);
-    console.log(`      スニペット: "${snippet}"`);
     let extractedUrl = null;
     // 1. 直接リンクをチェック（最も確実）
     if (link.includes('instagram.com')) {
@@ -303,7 +300,6 @@ function extractInstagramFromSearchItem(searchItem, salonName) {
     // 3. 拡張されたテキスト検索（複数のパターンに対応）
     if (!extractedUrl) {
         const fullText = `${title} ${snippet}`;
-        console.log(`        🔍 テキスト検索: "${fullText}"`);
         // Instagram URLの様々なパターンを定義
         const patterns = [
             // 完全なURL形式
@@ -355,7 +351,6 @@ function extractInstagramFromSearchItem(searchItem, salonName) {
         }
     }
     if (!extractedUrl) {
-        console.log(`      ❌ Instagram URL抽出失敗: すべてのステップで見つかりませんでした`);
         return null;
     }
     // 関連度を計算
@@ -369,4 +364,22 @@ function extractInstagramFromSearchItem(searchItem, salonName) {
         url: extractedUrl,
         relevance: relevance
     };
+}
+function selectBestInstagramUrl(candidates, salonName) {
+    if (!candidates || candidates.length === 0)
+        return undefined;
+    let bestUrl;
+    let bestScore = 0;
+    for (const candidate of candidates) {
+        const cleanUrl = cleanInstagramUrl(candidate);
+        if (!cleanUrl)
+            continue; // 無効なURLはスキップ
+        const score = calculateInstagramRelevance(cleanUrl, salonName);
+        if (score > bestScore) {
+            bestScore = score;
+            bestUrl = cleanUrl;
+        }
+    }
+    // スコアが 0 の場合は関連性なしと判断して undefined を返す
+    return bestScore > 0 ? bestUrl : undefined;
 }

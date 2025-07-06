@@ -122,8 +122,14 @@ function exportToCSV(salons, areaSelection, ratio, filename) {
     ];
     // CSVファイルの内容を生成
     const csvContent = csvRows.join('\n');
-    // ファイルパスを決定（プロジェクトルートに保存）
-    const filePath = path.join(process.cwd(), filename);
+    // list フォルダをプロジェクトルート直下に作成（なければ）
+    const outputDir = path.join(process.cwd(), 'list');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+        console.log(`📁 list フォルダを作成しました: ${outputDir}`);
+    }
+    // list フォルダ配下に保存
+    const filePath = path.join(outputDir, filename);
     try {
         // UTF-8 BOM付きで保存（Excelで正しく開けるように）
         const bom = '\uFEFF';

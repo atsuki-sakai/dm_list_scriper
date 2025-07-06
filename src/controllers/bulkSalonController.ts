@@ -1,6 +1,6 @@
 import { getAllSalons, extractSalonDetails } from '../services/scraper';
-import { resetEngineStatus } from '../services/googleSearch';
-import { searchWithMultipleInstagramQueries } from '../services/googleSearchNew';
+import { resetEngineStatus } from '../services/googleSearchNew';
+import { searchGoogleWithSalonName } from '../services/googleSearchNew';
 import { exportToCSV, displayCSVStats } from '../services/csvExport';
 import { displayError, displayProgress, displaySuccess } from '../services/display';
 import { ExtendedSalonDetails, SalonDetails, GoogleSearchResult, AreaSelectionResult } from '../types/index';
@@ -58,6 +58,7 @@ function normalizeSearchResult(searchResult: GoogleSearchResult, salonName: stri
  * @param areaSelection エリア選択情報（CSV出力用）
  */
 export async function processBulkSalons(listUrl: string, ratio: number = 0.5, areaSelection?: AreaSelectionResult): Promise<void> {
+    const startTime = Date.now(); // ⏱ 処理開始時間を記録
     try {
         // 検索エンジンの無効化状態をリセット（新しい処理セッション開始）
         resetEngineStatus();
@@ -101,9 +102,17 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
 
                 // 新しいInstagram検索機能を使用
                 const searchQuery = `ヘアサロン ${salonDetails.name} ${salonDetails.address} Instagram`;
-                console.log(`  🚀 複数Instagram検索クエリによる検索を開始...`);
+              
                 console.log(`  🔍 ベース検索クエリ: ${searchQuery}`);
-                const initialResult = await searchWithMultipleInstagramQueries(salonDetails.name, salonDetails.address);
+                
+                let initialResult: GoogleSearchResult;
+                try {
+                    initialResult = await searchGoogleWithSalonName(searchQuery, salonDetails.name, salonDetails.address);
+                } catch (error) {
+                    displayError('Google Search APIが利用できません。処理を終了します。');
+                    console.error('エラー詳細:', error);
+                    process.exit(1);
+                }
                 
                 // 検索結果を正規化
                 const googleResult = normalizeSearchResult(initialResult, salonDetails.name);
@@ -183,6 +192,10 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
         } else {
             displayError('処理できたサロン情報がありませんでした。');
         }
+
+        // 6. 実行時間を表示
+        const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`\n⏱ 処理時間: ${elapsedSec} 秒`);
 
     } catch (error) {
         displayError('バルク処理でエラーが発生しました', error);
