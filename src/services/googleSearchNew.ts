@@ -22,6 +22,48 @@ const disabledEngines = {
     yahoo: false,
 };
 
+// ======================= Google API リクエストカウンター ========================
+
+/**
+ * Google Custom Search API の使用回数を記録
+ * 100回制限を管理するために使用
+ */
+let googleApiRequestCount = 0;
+const GOOGLE_API_LIMIT = 100;
+
+/**
+ * Google API リクエストカウントを増加
+ */
+function incrementGoogleApiRequestCount(): void {
+    googleApiRequestCount++;
+    console.log(`  📊 Google API リクエスト: ${googleApiRequestCount}/${GOOGLE_API_LIMIT}`);
+}
+
+/**
+ * 現在の Google API リクエスト数を取得
+ * @returns 現在のリクエスト数
+ */
+export function getGoogleApiRequestCount(): number {
+    return googleApiRequestCount;
+}
+
+/**
+ * Google API リクエストカウントをリセット
+ */
+export function resetGoogleApiRequestCount(): void {
+    googleApiRequestCount = 0;
+    console.log('  🔄 Google API リクエストカウンターをリセットしました');
+}
+
+/**
+ * Google API リクエスト制限をチェック
+ * @param estimatedRequests 予想されるリクエスト数
+ * @returns 制限を超えるかどうか
+ */
+export function checkGoogleApiLimit(estimatedRequests: number = 1): boolean {
+    return (googleApiRequestCount + estimatedRequests) > GOOGLE_API_LIMIT;
+}
+
 /**
  * 検索エンジンを無効化する
  * @param engineName 無効化する検索エンジン名
@@ -49,6 +91,7 @@ export function resetEngineStatus(): void {
     Object.keys(disabledEngines).forEach(key => {
         disabledEngines[key as keyof typeof disabledEngines] = false;
     });
+    resetGoogleApiRequestCount();
     console.log('  🔄 検索エンジンの無効化状態をリセットしました');
 }
 
@@ -56,7 +99,9 @@ export function resetEngineStatus(): void {
  * 現在の検索エンジン状態を表示
  */
 export function showEngineStatus(): void {
-
+    // Google API リクエスト数を表示
+    console.log(`  📊 Google API リクエスト数: ${googleApiRequestCount}/${GOOGLE_API_LIMIT}`);
+    
     // 動的な無効化状態を表示
     console.log('  📊 動的無効化状態 (エラーによる):');
     Object.entries(disabledEngines).forEach(([engine, disabled]) => {
@@ -301,6 +346,9 @@ async function searchGoogleApi(query: string, salonName?: string): Promise<Googl
 
     try {
         console.log(`  🔍 Google Search API検索を実行中: "${query}"`);
+        
+        // Google API リクエストカウントを増加
+        incrementGoogleApiRequestCount();
         
         // Google Custom Search API URLを構築
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=5&lr=lang_ja&gl=jp`;
@@ -950,17 +998,15 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
     const searchResults: GoogleSearchResult[] = [];
     
     // === 🔄 並列検索ロジック開始 ===
-    // Google / Bing / Yahoo を同時に実行し、完了したものから結果を取り込む
+    // Yahoo / Bing / Google の順で優先実行し、完了したものから結果を取り込む
     const parallelPromises: Array<Promise<GoogleSearchResult>> = [];
     const engineLabels: string[] = [];
 
-    // Google Custom Search API
-    if (isEngineEnabled('google') && isGoogleApiAvailable()) {
-        console.log('  📡 Google Search API (Instagram & Business情報検索) 実行中（並列）...');
-        // Instagramとビジネス情報の両方をカバーするクエリを生成
-        const combinedQuery = `${salonName} ${address || ''} Instagram`;
-        parallelPromises.push(searchGoogleApi(combinedQuery, salonName));
-        engineLabels.push('Google');
+    // Yahoo スクレイピング（最優先）
+    if (YAHOO_SEARCH && isEngineEnabled('yahoo')) {
+        console.log('  🎯 Yahoo検索実行中（並列・最優先）...');
+        parallelPromises.push(searchYahoo(instagramQuery));
+        engineLabels.push('Yahoo');
     }
 
     // Bing スクレイピング
@@ -970,11 +1016,13 @@ export async function searchGoogleWithSalonName(query: string, salonName?: strin
         engineLabels.push('Bing');
     }
 
-    // Yahoo スクレイピング
-    if (YAHOO_SEARCH && isEngineEnabled('yahoo')) {
-        console.log('  🎯 Yahoo検索実行中（並列）...');
-        parallelPromises.push(searchYahoo(instagramQuery));
-        engineLabels.push('Yahoo');
+    // Google Custom Search API（最後の選択肢）
+    if (isEngineEnabled('google') && isGoogleApiAvailable()) {
+        console.log('  📡 Google Search API (Instagram & Business情報検索) 実行中（並列・最後の選択肢）...');
+        // Instagramとビジネス情報の両方をカバーするクエリを生成
+        const combinedQuery = `${salonName} ${address || ''} Instagram`;
+        parallelPromises.push(searchGoogleApi(combinedQuery, salonName));
+        engineLabels.push('Google');
     }
 
     // 並列実行結果を取得（すべて完了を待つ）

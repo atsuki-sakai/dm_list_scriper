@@ -1,11 +1,46 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.processBulkSalons = processBulkSalons;
+const path = __importStar(require("path"));
 const scraper_1 = require("../services/scraper");
-const googleSearch_1 = require("../services/googleSearch");
 const googleSearchNew_1 = require("../services/googleSearchNew");
+const googleSearchNew_2 = require("../services/googleSearchNew");
 const csvExport_1 = require("../services/csvExport");
 const display_1 = require("../services/display");
+const userInput_1 = require("../services/userInput");
 const index_1 = require("../utils/index");
 /**
  * 検索結果を正規化（全ての候補を保持、関連度フィルタリングなし）
@@ -57,7 +92,7 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
     const startTime = Date.now(); // ⏱ 処理開始時間を記録
     try {
         // 検索エンジンの無効化状態をリセット（新しい処理セッション開始）
-        (0, googleSearch_1.resetEngineStatus)();
+        (0, googleSearchNew_1.resetEngineStatus)();
         (0, display_1.displayProgress)('サロン一覧を取得中...');
         // 1. 全サロン一覧を取得
         const allSalons = await (0, scraper_1.getAllSalons)(listUrl);
@@ -71,6 +106,17 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
         const percentLabel = Math.round(ratio * 100);
         console.log(`\n📊 処理対象: ${targetSalons.length}件のサロン（全${allSalons.length}件の${percentLabel}%）`);
         console.log('💡 最後のサロンから順番に処理します...\n');
+        // Google API制限チェック
+        const currentApiCount = (0, googleSearchNew_1.getGoogleApiRequestCount)();
+        const estimatedApiRequests = currentApiCount + targetSalons.length;
+        if ((0, googleSearchNew_1.checkGoogleApiLimit)(targetSalons.length)) {
+            console.log(`\n⚠️  Google API制限警告: 現在${currentApiCount}回、処理により${estimatedApiRequests}回となり、100回制限に近づきます。`);
+            const shouldContinue = await (0, userInput_1.promptGoogleApiLimitConfirmation)(currentApiCount, estimatedApiRequests);
+            if (!shouldContinue) {
+                console.log('処理をキャンセルしました。');
+                return;
+            }
+        }
         // 3. 各サロンの詳細情報を取得し、Google検索を実行
         const extendedSalonDetails = [];
         for (let i = 0; i < targetSalons.length; i++) {
@@ -90,7 +136,7 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
                 console.log(`  🔍 ベース検索クエリ: ${searchQuery}`);
                 let initialResult;
                 try {
-                    initialResult = await (0, googleSearchNew_1.searchWithMultipleInstagramQueries)(salonDetails.name, salonDetails.address);
+                    initialResult = await (0, googleSearchNew_2.searchGoogleWithSalonName)(searchQuery, salonDetails.name, salonDetails.address);
                 }
                 catch (error) {
                     (0, display_1.displayError)('Google Search APIが利用できません。処理を終了します。');
@@ -163,6 +209,28 @@ async function processBulkSalons(listUrl, ratio = 0.5, areaSelection) {
             // CSVファイルを出力
             const csvPath = (0, csvExport_1.exportToCSV)(extendedSalonDetails, areaSelection, ratio);
             (0, display_1.displaySuccess)(`処理完了！CSVファイル: ${csvPath}`);
+            // CSV分割オプションをユーザーに確認
+            const chunkSize = await (0, userInput_1.promptCSVSplitConfirmation)(extendedSalonDetails.length);
+            if (chunkSize > 0) {
+                console.log('\n📊 CSV分割を実行中...');
+                try {
+                    const splitOptions = {
+                        chunkSize: chunkSize,
+                        inputFilePath: csvPath,
+                        outputDir: path.dirname(csvPath) // 元のファイルと同じディレクトリ
+                    };
+                    const splitFiles = (0, csvExport_1.splitCSV)(splitOptions);
+                    console.log(`\n✅ CSV分割完了！`);
+                    console.log(`📂 分割されたファイル数: ${splitFiles.length}個`);
+                    console.log(`📁 出力ディレクトリ: ${path.dirname(csvPath)}`);
+                }
+                catch (error) {
+                    console.error('❌ CSV分割でエラーが発生しました:', error);
+                }
+            }
+            else {
+                console.log('📄 CSV分割はスキップされました。');
+            }
         }
         else {
             (0, display_1.displayError)('処理できたサロン情報がありませんでした。');

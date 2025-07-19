@@ -239,3 +239,166 @@ export function displayCSVStats(salons: ExtendedSalonDetails[]): void {
     console.log(`   Google レビュー数: ${googleReviewCount}件 (${Math.round(googleReviewCount / salons.length * 100)}%)`);
     console.log(`   Google営業時間: ${googleHoursCount}件 (${Math.round(googleHoursCount / salons.length * 100)}%)`);
 }
+
+// ======================= CSV分割機能 ========================
+
+/**
+ * CSVファイルの行データ
+ */
+interface CSVRow {
+    [key: string]: string;
+}
+
+/**
+ * CSV分割オプション
+ */
+export interface CSVSplitOptions {
+    chunkSize: number;
+    inputFilePath: string;
+    outputDir?: string;
+}
+
+/**
+ * CSVファイルを任意の行数で分割する
+ * @param options 分割オプション
+ * @returns 分割されたファイルパスの配列
+ */
+export function splitCSV(options: CSVSplitOptions): string[] {
+    const { chunkSize, inputFilePath, outputDir } = options;
+    
+    // 出力ディレクトリを決定（指定されていない場合は入力ファイルと同じディレクトリ）
+    const finalOutputDir = outputDir || path.dirname(inputFilePath);
+    
+    // 出力ディレクトリを作成（存在しない場合）
+    if (!fs.existsSync(finalOutputDir)) {
+        fs.mkdirSync(finalOutputDir, { recursive: true });
+    }
+
+    console.log(`📄 CSVファイルを分割中: ${path.basename(inputFilePath)}`);
+    console.log(`📦 分割サイズ: ${chunkSize}行/ファイル`);
+
+    try {
+        const content = fs.readFileSync(inputFilePath, 'utf-8');
+        const { headers, rows } = parseCSV(content);
+        
+        const outputPaths = writeChunks(inputFilePath, finalOutputDir, headers, rows, chunkSize);
+        
+        console.log(`✅ 分割完了: ${outputPaths.length}個のファイルに分割 (総行数: ${rows.length}行)`);
+        return outputPaths;
+    } catch (error) {
+        console.error('❌ CSV分割に失敗しました:', error);
+        throw error;
+    }
+}
+
+/**
+ * シンプルなCSV解析関数
+ * @param content CSVファイルの内容
+ * @returns ヘッダーと行データ
+ */
+function parseCSV(content: string): { headers: string[], rows: CSVRow[] } {
+    const lines = content.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return { headers: [], rows: [] };
+
+    const headers = parseCSVLine(lines[0]);
+    const rows = lines.slice(1).map(line => {
+        const values = parseCSVLine(line);
+        const row: CSVRow = {};
+        headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+        });
+        return row;
+    });
+
+    return { headers, rows };
+}
+
+/**
+ * CSV行を解析する（カンマとクォートを適切に処理）
+ * @param line CSV行
+ * @returns 列の値の配列
+ */
+function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < line.length) {
+        const char = line[i];
+        
+        if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i += 2;
+            } else {
+                inQuotes = !inQuotes;
+                i++;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current);
+            current = '';
+            i++;
+        } else {
+            current += char;
+            i++;
+        }
+    }
+    
+    result.push(current);
+    return result;
+}
+
+/**
+ * 分割されたCSVファイルを書き込む
+ * @param originalPath 元のファイルパス
+ * @param outputDir 出力ディレクトリ
+ * @param headers ヘッダー行
+ * @param rows データ行
+ * @param chunkSize 分割サイズ
+ * @returns 作成されたファイルパスの配列
+ */
+function writeChunks(
+    originalPath: string,
+    outputDir: string,
+    headers: string[],
+    rows: CSVRow[],
+    chunkSize: number
+): string[] {
+    const originalFileName = path.basename(originalPath, '.csv');
+    const totalChunks = Math.ceil(rows.length / chunkSize);
+    const outputPaths: string[] = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+        const startIndex = i * chunkSize;
+        const endIndex = Math.min(startIndex + chunkSize, rows.length);
+        const chunk = rows.slice(startIndex, endIndex);
+
+        const chunkFileName = `${originalFileName}_part${i + 1}_of_${totalChunks}.csv`;
+        const outputPath = path.join(outputDir, chunkFileName);
+
+        // CSVコンテンツを作成
+        let csvContent = headers.join(',') + '\n';
+        
+        chunk.forEach(row => {
+            const rowValues = headers.map(header => {
+                const value = row[header] || '';
+                // クォートをエスケープし、必要に応じてクォートで囲む
+                if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                    return `"${value.replace(/"/g, '""')}"`;
+                }
+                return value;
+            });
+            csvContent += rowValues.join(',') + '\n';
+        });
+
+        // UTF-8 BOM付きで保存（Excelで正しく開けるように）
+        const bom = '\uFEFF';
+        fs.writeFileSync(outputPath, bom + csvContent, 'utf-8');
+        outputPaths.push(outputPath);
+        
+        console.log(`  📄 作成: ${chunkFileName} (${chunk.length}行)`);
+    }
+
+    return outputPaths;
+}

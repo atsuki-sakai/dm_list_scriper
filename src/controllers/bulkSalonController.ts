@@ -1,8 +1,10 @@
+import * as path from 'path';
 import { getAllSalons, extractSalonDetails } from '../services/scraper';
-import { resetEngineStatus } from '../services/googleSearchNew';
+import { resetEngineStatus, getGoogleApiRequestCount, checkGoogleApiLimit } from '../services/googleSearchNew';
 import { searchGoogleWithSalonName } from '../services/googleSearchNew';
-import { exportToCSV, displayCSVStats } from '../services/csvExport';
+import { exportToCSV, displayCSVStats, splitCSV, CSVSplitOptions } from '../services/csvExport';
 import { displayError, displayProgress, displaySuccess } from '../services/display';
+import { promptGoogleApiLimitConfirmation, promptCSVSplitConfirmation } from '../services/userInput';
 import { ExtendedSalonDetails, SalonDetails, GoogleSearchResult, AreaSelectionResult } from '../types/index';
 import { sleep, calculateRelevanceScore } from '../utils/index';
 
@@ -80,6 +82,20 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
         const percentLabel = Math.round(ratio * 100);
         console.log(`\n📊 処理対象: ${targetSalons.length}件のサロン（全${allSalons.length}件の${percentLabel}%）`);
         console.log('💡 最後のサロンから順番に処理します...\n');
+
+        // Google API制限チェック
+        const currentApiCount = getGoogleApiRequestCount();
+        const estimatedApiRequests = currentApiCount + targetSalons.length;
+        
+        if (checkGoogleApiLimit(targetSalons.length)) {
+            console.log(`\n⚠️  Google API制限警告: 現在${currentApiCount}回、処理により${estimatedApiRequests}回となり、100回制限に近づきます。`);
+            
+            const shouldContinue = await promptGoogleApiLimitConfirmation(currentApiCount, estimatedApiRequests);
+            if (!shouldContinue) {
+                console.log('処理をキャンセルしました。');
+                return;
+            }
+        }
 
         // 3. 各サロンの詳細情報を取得し、Google検索を実行
         const extendedSalonDetails: ExtendedSalonDetails[] = [];
@@ -189,6 +205,29 @@ export async function processBulkSalons(listUrl: string, ratio: number = 0.5, ar
             // CSVファイルを出力
             const csvPath = exportToCSV(extendedSalonDetails, areaSelection, ratio);
             displaySuccess(`処理完了！CSVファイル: ${csvPath}`);
+            
+            // CSV分割オプションをユーザーに確認
+            const chunkSize = await promptCSVSplitConfirmation(extendedSalonDetails.length);
+            
+            if (chunkSize > 0) {
+                console.log('\n📊 CSV分割を実行中...');
+                try {
+                    const splitOptions: CSVSplitOptions = {
+                        chunkSize: chunkSize,
+                        inputFilePath: csvPath,
+                        outputDir: path.dirname(csvPath) // 元のファイルと同じディレクトリ
+                    };
+                    
+                    const splitFiles = splitCSV(splitOptions);
+                    console.log(`\n✅ CSV分割完了！`);
+                    console.log(`📂 分割されたファイル数: ${splitFiles.length}個`);
+                    console.log(`📁 出力ディレクトリ: ${path.dirname(csvPath)}`);
+                } catch (error) {
+                    console.error('❌ CSV分割でエラーが発生しました:', error);
+                }
+            } else {
+                console.log('📄 CSV分割はスキップされました。');
+            }
         } else {
             displayError('処理できたサロン情報がありませんでした。');
         }

@@ -40,6 +40,8 @@ exports.promptSubAreaSelection = promptSubAreaSelection;
 exports.promptDetailAreaSelection = promptDetailAreaSelection;
 exports.promptSalonSelectionMethod = promptSalonSelectionMethod;
 exports.promptSalonSelection = promptSalonSelection;
+exports.promptGoogleApiLimitConfirmation = promptGoogleApiLimitConfirmation;
+exports.promptCSVSplitConfirmation = promptCSVSplitConfirmation;
 const readline = __importStar(require("node:readline"));
 const node_process_1 = require("node:process");
 // ======================= ユーザー入力処理 ========================
@@ -141,4 +143,60 @@ async function promptSalonSelection(salons) {
     }
     console.log('無効な選択です。');
     return undefined;
+}
+/**
+ * Google API制限に関するユーザー確認プロンプト
+ * @param currentCount 現在のAPI使用回数
+ * @param estimatedTotal 予想される総使用回数
+ * @returns ユーザーが続行を選択した場合はtrue
+ */
+async function promptGoogleApiLimitConfirmation(currentCount, estimatedTotal) {
+    console.log('\n⚠️  Google API使用制限に関する確認');
+    console.log(`現在のGoogle APIリクエスト数: ${currentCount}/100`);
+    console.log(`予想される総リクエスト数: ${estimatedTotal}`);
+    if (estimatedTotal > 100) {
+        console.log('🚨 予想リクエスト数が100回制限を超えています！');
+    }
+    else {
+        console.log('⚠️  処理を続行すると100回制限に近づく可能性があります。');
+    }
+    const response = await askQuestion('\n続行しますか？ (y/N): ');
+    return response.toLowerCase() === 'y' || response.toLowerCase() === 'yes';
+}
+/**
+ * CSV分割に関するユーザー確認プロンプト
+ * @param totalRows 総行数
+ * @returns ユーザーが選択した分割サイズ（0の場合は分割しない）
+ */
+async function promptCSVSplitConfirmation(totalRows) {
+    console.log('\n📊 CSV分割オプション');
+    console.log(`総データ行数: ${totalRows}行`);
+    console.log('\n分割オプションを選択してください:');
+    console.log('1. 分割しない（1つのファイル）');
+    console.log('2. 30行ずつに分割');
+    console.log('3. 50行ずつに分割');
+    console.log('4. 100行ずつに分割');
+    console.log('5. カスタム分割（任意の行数）');
+    const choice = await askQuestion('\n選択してください (1-5): ');
+    switch (choice) {
+        case '1':
+            return 0; // 分割しない
+        case '2':
+            return 30;
+        case '3':
+            return 50;
+        case '4':
+            return 100;
+        case '5':
+            const customSize = await askQuestion('分割サイズを入力してください（行数）: ');
+            const size = parseInt(customSize);
+            if (isNaN(size) || size <= 0) {
+                console.log('無効な数値です。分割を行いません。');
+                return 0;
+            }
+            return size;
+        default:
+            console.log('無効な選択です。分割を行いません。');
+            return 0;
+    }
 }
